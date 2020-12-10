@@ -1,0 +1,20 @@
+[package]
+authors = ["Joep Jansen <joep.w.jansen@gmail.com>"]
+edition = "2018"
+name = "wordfeud-ocr"
+version = "0.1.0"
+
+[dependencies]
+thiserror = "1.0"
+
+[dependencies.image]
+version = "0.23"
+default-features = false
+features = ["png", "pnm"]
+
+[dependencies.imageproc]
+version = "0.22"
+default-features = false
+
+[dev-dependencies]
+anyhow = "1.0"

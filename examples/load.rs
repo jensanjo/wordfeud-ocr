@@ -1,0 +1,125 @@
+use anyhow::{Context, Result};
+use image::{io::Reader as ImageReader, GenericImageView};
+use imageproc::drawing::draw_antialiased_line_segment_mut;
+use imageproc::pixelops::interpolate;
+use wordfeud_ocr::BoardLayout;
+
+fn run() -> Result<()> {
+    let path = std::env::args().nth(1).unwrap();
+    eprintln!("read image from {}", path);
+    let img = ImageReader::open(&path)
+        .with_context(|| format!("Failed to open {}", path))?
+        .decode()?;
+
+    let gray = img.clone().into_luma8();
+    let mut layout = BoardLayout::new(&gray);
+
+    // println!("Tray stats:");
+    // let traystats = layout.traystats();
+    // for (i, (mean, var)) in traystats.iter().enumerate() {
+    //     println!("{} {} {}", i, mean, var);
+    // }
+
+    layout.segment()?;
+
+    eprintln!(
+        "board: y0 = {}, height = {}",
+        layout.board_area.y, layout.board_area.height
+    );
+    for (i, &(y0, y1)) in layout.rows.iter().enumerate() {
+        eprintln!("  Row {}: {},{} {}", i, y0, y1, y1 - y0);
+    }
+    for (i, &(x0, x1)) in layout.cols.iter().enumerate() {
+        eprintln!("  Col {}: {},{} {}", i, x0, x1, x1 - x0);
+    }
+    eprintln!(
+        "Tray: y0 = {}, height = {}",
+        layout.tray_area.y, layout.tray_area.height
+    );
+    for (i, &(x0, x1)) in layout.traycols.iter().enumerate() {
+        eprintln!("  Col {}: {},{} {}", i, x0, x1, x1 - x0);
+    }
+
+    // draw the tile rows in the image
+    let red = image::Rgba([255, 0, 0, 255]);
+    let blue = image::Rgba([0, 0, 255, 255]);
+    let w = layout.board_area.width as i32;
+    let mut img = img;
+    for &(y0, y1) in layout.rows.iter() {
+        draw_antialiased_line_segment_mut(
+            &mut img,
+            (0, y0 as i32),
+            (w, y0 as i32),
+            red,
+            interpolate,
+        );
+        draw_antialiased_line_segment_mut(
+            &mut img,
+            (0, y1 as i32),
+            (w, y1 as i32),
+            blue,
+            interpolate,
+        );
+    }
+    let (y0, y1) = (
+        layout.board_area.y as i32,
+        (layout.board_area.y + layout.board_area.height) as i32,
+    );
+    for &(x0, x1) in layout.cols.iter() {
+        draw_antialiased_line_segment_mut(
+            &mut img,
+            (x0 as i32, y0),
+            (x0 as i32, y1),
+            red,
+            interpolate,
+        );
+        draw_antialiased_line_segment_mut(
+            &mut img,
+            (x1 as i32, y0),
+            (x1 as i32, y1),
+            blue,
+            interpolate,
+        );
+    }
+
+    let (y0, y1) = (
+        layout.tray_area.y as i32,
+        (layout.tray_area.y + layout.tray_area.height) as i32,
+    );
+    for &(x0, x1) in layout.traycols.iter() {
+        draw_antialiased_line_segment_mut(
+            &mut img,
+            (x0 as i32, y0),
+            (x0 as i32, y1),
+            red,
+            interpolate,
+        );
+        draw_antialiased_line_segment_mut(
+            &mut img,
+            (x1 as i32, y0),
+            (x1 as i32, y1),
+            blue,
+            interpolate,
+        );
+    }
+    let width = layout.board_area.width;
+    let height = layout.board_area.height;
+    let x = layout.board_area.x;
+    let y = layout.board_area.y;
+    let board = img.view(x, y, width, height).to_image();
+    board.save("board.png")?;
+
+    let width = layout.tray_area.width;
+    let height = layout.tray_area.height;
+    let x = layout.tray_area.x;
+    let y = layout.tray_area.y;
+    let tray = img.view(x, y, width, height).to_image();
+    tray.save("tray.png")?;
+    Ok(())
+}
+
+fn main() {
+    if let Err(err) = run() {
+        eprintln!("{}", err);
+    }
+}

@@ -1,0 +1,6 @@
+/target
+Cargo.lock
+stats/
+screenshots/
+tray.png
+board.png

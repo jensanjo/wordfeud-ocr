@@ -1,7 +1,10 @@
 use crate::error::Error;
-use image::math::Rect;
-use image::{ImageBuffer, Luma}; //, SubImage};
+use image::{DynamicImage, math::Rect};
+use image::{io::Reader as ImageReader, ImageBuffer, Luma, /*SubImage,*/ GenericImage, GenericImageView};
 use imageproc::integral_image::{integral_image, integral_squared_image, sum_image_pixels};
+use std::{fs, io};
+
+pub const THRESHOLD: f64 = 0.65;
 
 #[derive(Debug, PartialEq)]
 pub enum Segment {
@@ -30,6 +33,7 @@ pub struct BoardLayout<'a> {
     pub rows: Vec<(usize, usize)>,
     pub cols: Vec<(usize, usize)>,
     pub traycols: Vec<(usize, usize)>,
+    pub cells: Vec<Rect>,
 }
 
 fn close(a: u32, b: u32, tol: u32) -> bool {
@@ -61,6 +65,7 @@ impl<'a> BoardLayout<'a> {
             rows: Vec::new(),
             cols: Vec::new(),
             traycols: Vec::new(),
+            cells: Vec::new(),
         }
     }
 
@@ -283,8 +288,88 @@ impl<'a> BoardLayout<'a> {
         }
         stats
     }
+
+    /// Create tile sub images for board and tray
+    pub fn get_cells(&mut self) {
+        let mut cells = Vec::new();
+        // make sure we have 15x15 tiles
+        assert_eq!(self.rows.len(), 15);
+        assert_eq!(self.cols.len(), 15);
+        // find out what size our tiles should be
+        let tiles_height: usize = self.rows.iter().map(|&(y0,y1)| y1 - y0).sum();
+        let tiles_width: usize = self.cols.iter().map(|&(x0, x1)| x1 - x0).sum();
+        let (tile_height, tile_width) = ((tiles_height as u32) / 15, (tiles_width as u32) / 15);
+        println!("{} {} {} {}", self.board_area.width, self.board_area.height, tile_width, tile_height);
+        for &(y0, _y1) in self.rows.iter() {
+            for &(x0, _x1) in self.cols.iter() {
+                let cell = Rect{x: x0 as u32, y: y0 as u32, width: tile_width, height: tile_height};
+                cells.push(cell);
+            }
+        }
+        self.cells = cells;
+    }
+
+    pub fn get_tile_index(&self) -> Vec<usize> {
+        let mut index = Vec::new();
+        for (i, cell ) in self.cells.iter().enumerate() {
+            let (left, top,right,bottom) = (cell.x, cell.y, cell.x + cell.width - 1, cell.y + cell.height - 1);
+            let sum = sum_image_pixels(&self.integral, left, top, right, bottom);
+            let mean = sum[0] as f64 / (cell.width * cell.height) as f64 / 256.;
+            if mean > THRESHOLD {
+                index.push(i);
+            }
+            // println!("{:2} {:2} {:.2}", i / 15, i % 15, mean as f64 / 256.);
+        }
+        index
+    }
+
+    /// Create a collage image of all the segmented tiles
+    pub fn collage(&self) -> Option<ImageBuffer<Luma<u8>, Vec<u8>>> {
+        let index = self.get_tile_index();
+        if index.is_empty() {
+            return None;
+        }
+        let nimages = index.len() as f64;
+        let n = nimages.sqrt().ceil(); // size of collage square
+        let (ncols, nrows) = (n as u32, ((nimages / n).ceil()) as u32);
+       
+        let cell = self.cells[0];
+        let (w, h) = (cell.width, cell.height);
+        let mut img: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w * ncols, h * nrows);
+        eprintln!("Create collage {} cols x {} rows, size {},{}", ncols, nrows, img.width(), img.height());
+        for (i, &idx) in index.iter().enumerate() {
+            let cell = self.cells[idx];
+            // create destination sub image in collage:
+            let (row, col) = ((i as u32 / ncols), (i as u32 % ncols));
+            let mut dest = img.sub_image(col*w, row*h, w, h);
+            // create source sub image
+            let src = self.img.view(cell.x, cell.y, w, h);
+            // copy the pixels
+            dest.copy_from(&src, 0, 0).unwrap();
+            eprintln!("Tile {}: Copy {}x{} from {},{} to {},{}", i, w,h, cell.x, cell.y, col*w, row*h);
+           
+        }
+        Some(img)
+    }
+
+    pub fn read_templates(&mut self) -> Result<Vec<(String, DynamicImage)>,Error> {
+        let mut entries = fs::read_dir("templates").unwrap()
+            .map(|res| res.map(|e| e.path()))
+            .collect::<Result<Vec<_>, io::Error>>().unwrap();
+        entries.sort();
+        let mut templates = Vec::new();
+        for path in entries {
+            if let Some(stem) = path.file_stem() {
+                let key = stem.to_str().unwrap();
+                let template = ImageReader::open(&path).unwrap().decode().unwrap();
+                templates.push((String::from(key), template));
+            }
+        }
+        Ok(templates)
+    }
 }
 
+/// This is a modified copy of [imageproc::integral_image::variance]()
 pub fn variance(
     integral_image: &ImageBuffer<Luma<u64>, Vec<u64>>,
     integral_squared_image: &ImageBuffer<Luma<u64>, Vec<u64>>,
@@ -305,16 +390,37 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use image::io::Reader as ImageReader;
+    // use image::imageops;
 
     #[test]
     fn test() -> Result<()> {
         let img = ImageReader::open("screenshots/screenshot_1080x2160_2.png")?.decode()?;
         let gray = img.into_luma8();
-        let layout = BoardLayout::new(&gray);
-        let stats = layout.rowstats();
-        for (i, &(mean, var)) in stats.iter().enumerate() {
-            println!("{} {} {}", i, mean, var);
+        let mut layout = BoardLayout::new(&gray);
+        layout.segment()?;
+        // let stats = layout.rowstats();
+        // for (i, &(mean, var)) in stats.iter().enumerate() {
+        //     println!("{} {} {}", i, mean, var);
+        // }
+        layout.get_cells();
+        let tiles = layout.get_tile_index();
+        println!("{:?}", tiles);
+
+        if let Some(collage) = layout.collage() {
+            // let resized = imageops::resize(&collage, 640, 576, imageops::FilterType::Triangle);
+            collage.save("collage.png")?;
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_templates() -> Result<()> {
+        let img = ImageReader::open("screenshots/screenshot_1080x2160_2.png")?.decode()?;
+        let gray = img.into_luma8();
+        let mut layout = BoardLayout::new(&gray);
+        layout.segment()?; 
+        layout.read_templates()?;
         Ok(())
     }
 }

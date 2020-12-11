@@ -7,4 +7,10 @@ pub enum Error {
     BoardNotSquare(f32),
     #[error("Failed to create layout")]
     LayoutFailed(Segment),
+    /// Error reading wordfile
+    #[error("Template \"{path}\" could not be read")]
+    ReadError {
+        path: String,
+        source: std::io::Error,
+    },
 }

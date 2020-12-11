@@ -2,5 +2,5 @@
 Cargo.lock
 stats/
 screenshots/
-tray.png
-board.png
+templates/
+*.png

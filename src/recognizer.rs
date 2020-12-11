@@ -1,16 +1,16 @@
 use crate::error::Error;
-use crate::layout::Layout;
+use crate::layout::{Layout, variance};
 use image::math::Rect;
 use image::{
     io::Reader as ImageReader, GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma,
     SubImage,
 };
 use imageproc::integral_image::sum_image_pixels;
-use imageproc::template_matching::{find_extremes, match_template, Extremes, MatchTemplateMethod};
+use imageproc::template_matching::{find_extremes, match_template, MatchTemplateMethod};
 use std::{fs, io};
 
 pub type Ocr = Vec<Vec<String>>;
-pub type OcrResult = Vec<(usize, String, Extremes<f32>)>;
+pub type OcrResult = Vec<(usize, String, f32, (u32, u32))>;
 
 pub const THRESHOLD: f64 = 0.65;
 
@@ -126,6 +126,56 @@ impl<'a> Board<'a> {
         Ok(())
     }
 
+    fn match_template(
+        tile: &GrayImage,
+        templates: &[(String, GrayImage)],
+    ) -> (String, f32, (u32, u32)) {
+        let method = MatchTemplateMethod::SumOfSquaredErrorsNormalized;
+        let mut matches = templates
+            .iter()
+            .map(|(letter, template)| {
+                (
+                    letter.clone(),
+                    find_extremes(&match_template(&tile, &template, method)),
+                )
+            })
+            .collect::<Vec<_>>();
+        // find the best match
+        matches.sort_by(|a, b| a.1.min_value.partial_cmp(&b.1.min_value).unwrap());
+        let (letter, extreme) = matches[0].clone();
+        (letter, extreme.min_value, extreme.min_value_location)
+    }
+
+    /// calculate mean pixel value in rect
+    #[allow(dead_code)]
+    fn mean(&self, rect: Rect) -> f64 {
+        let sum = sum_image_pixels(
+            &self.layout.integral,
+            rect.x,
+            rect.y,
+            rect.x + rect.width - 1,
+            rect.y + rect.height - 1,
+        );
+        let count = rect.width * rect.height;
+        sum[0] as f64 / count as f64 / 256.
+    }
+
+    /// calculate mean and variance pixel value in rect
+    fn stats(&self, rect: Rect) -> (f64, f64) {
+        let (left, top, right, bottom) = (rect.x, rect.y, rect.x + rect.width - 1, rect.y + rect.height - 1);
+        let sum = sum_image_pixels(
+            &self.layout.integral,
+            left, top, right, bottom
+        );
+        let var = variance(
+            &self.layout.integral,
+            &self.layout.integral_squared,
+           left, top, right, bottom
+        );
+        let count = rect.width * rect.height;
+        (sum[0] as f64 / count as f64 / 256., var.sqrt() / 256.)
+    }
+
     pub fn recognize_tiles(
         &self,
         tile_index: &[usize],
@@ -143,7 +193,6 @@ impl<'a> Board<'a> {
 
         let mut recognized = Vec::new();
         for &index in self.tile_index.iter() {
-            // println!("{} match tile at {},{}", i, index % 15, index / 15);
             let b = cells[index];
             let (dx, dy, w, h) = (7, 12, 43, 55);
             let bounds = Rect {
@@ -152,34 +201,26 @@ impl<'a> Board<'a> {
                 width: w,
                 height: h,
             };
+            // check if the tile is a wildcard
+            let topright = Rect { x: b.x + 49, y: b.y + 4, width: 12, height: 18 };
+            let (mean, std) = self.stats(topright);
+            println!("{:2} {:.2} {:.2}", index, mean, std);
+            let wildcard = mean > 0.9 && std < 0.1;
+
             let tile: GrayImage = self
                 .img
                 .view(bounds.x, bounds.y, bounds.width, bounds.height)
                 .to_image();
-            // match templates
-            let method = MatchTemplateMethod::SumOfSquaredErrorsNormalized;
-            let mut matches = self
-                .templates
-                .iter()
-                .map(|(letter, template)| {
-                    (
-                        letter.clone(),
-                        find_extremes(&match_template(&tile, &template, method)),
-                    )
-                })
-                .collect::<Vec<_>>();
-            // find the best match
-            matches.sort_by(|a, b| a.1.min_value.partial_cmp(&b.1.min_value).unwrap());
-            let (letter, extreme) = matches[0].clone();
+            // // match templates
+            let (letter, min_value, min_value_location) =
+                Board::match_template(&tile, &self.templates);
             let (row, col) = (index / cols, index % cols);
-            ocr[row][col] = letter.to_lowercase();
-            recognized.push((index, letter.clone(), extreme));
-            // for (letter, ex) in matches.iter().take(3) {
-            //     println!(
-            //         "  {}: min {:.3} at {:?}",
-            //         letter, ex.min_value, ex.min_value_location
-            //     );
-            // }
+            ocr[row][col] = if ! wildcard {
+                letter.to_lowercase()
+            } else {
+                letter.clone()
+            };
+            recognized.push((index, letter.clone(), min_value, min_value_location));
         }
         (ocr, recognized)
     }

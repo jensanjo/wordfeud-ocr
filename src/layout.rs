@@ -286,7 +286,7 @@ impl<'a> Layout<'a> {
 }
 
 /// This is a modified copy of [imageproc::integral_image::variance]()
-fn variance(
+pub fn variance(
     integral_image: &IntegralImage,
     integral_squared_image: &IntegralImage,
     left: u32,

@@ -9,8 +9,8 @@ fn run() -> Result<()> {
     let gray = img.into_luma8();
     let mut board = Board::new(&gray);
     board.layout.segment()?;
-    board.get_cells();
-    board.get_tile_index();
+    board.cells = board.get_cells();
+    board.tile_index = board.get_tile_index();
     board.read_templates()?;
     let now = Instant::now();
     let (ocr, _matches) = board.recognize_tiles(&board.tile_index, &board.cells, (15, 15));

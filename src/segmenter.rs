@@ -1,10 +1,17 @@
 use crate::error::Error;
-use image::{DynamicImage, math::Rect};
-use image::{io::Reader as ImageReader, ImageBuffer, Luma, /*SubImage,*/ GenericImage, GenericImageView};
+use image::math::Rect;
+use image::{
+    io::Reader as ImageReader, GenericImage, GenericImageView, GrayImage, ImageBuffer, Luma,
+    SubImage,
+};
 use imageproc::integral_image::{integral_image, integral_squared_image, sum_image_pixels};
+use imageproc::template_matching::{find_extremes, match_template, MatchTemplateMethod, Extremes};
 use std::{fs, io};
 
 pub const THRESHOLD: f64 = 0.65;
+
+pub type Ocr = Vec<Vec<String>>;
+pub type OcrResult = Vec<(usize, String, Extremes<f32>)>;
 
 #[derive(Debug, PartialEq)]
 pub enum Segment {
@@ -19,13 +26,13 @@ pub enum Segment {
     Done,
 }
 
-pub type GrayImage = ImageBuffer<Luma<u8>, Vec<u8>>;
+pub type IntegralImage = ImageBuffer<Luma<u64>, Vec<u64>>;
 
 // #[derive(Debug)]
 pub struct BoardLayout<'a> {
     pub img: &'a GrayImage,
-    pub integral: ImageBuffer<Luma<u64>, Vec<u64>>,
-    pub integral_squared: ImageBuffer<Luma<u64>, Vec<u64>>,
+    pub integral: IntegralImage,
+    pub integral_squared: IntegralImage,
     pub board_area: Rect,
     pub tray_area: Rect,
     pub top_border: (usize, usize),
@@ -34,6 +41,8 @@ pub struct BoardLayout<'a> {
     pub cols: Vec<(usize, usize)>,
     pub traycols: Vec<(usize, usize)>,
     pub cells: Vec<Rect>,
+    pub tile_index: Vec<usize>,
+    pub templates: Vec<(String, GrayImage)>,
 }
 
 fn close(a: u32, b: u32, tol: u32) -> bool {
@@ -41,7 +50,7 @@ fn close(a: u32, b: u32, tol: u32) -> bool {
 }
 
 impl<'a> BoardLayout<'a> {
-    pub fn new(img: &'a ImageBuffer<Luma<u8>, Vec<u8>>) -> BoardLayout<'a> {
+    pub fn new(img: &'a GrayImage) -> BoardLayout<'a> {
         let integral = integral_image::<_, u64>(img);
         let integral_squared = integral_squared_image::<_, u64>(img);
         BoardLayout {
@@ -66,6 +75,8 @@ impl<'a> BoardLayout<'a> {
             cols: Vec::new(),
             traycols: Vec::new(),
             cells: Vec::new(),
+            tile_index: Vec::new(),
+            templates: Vec::new(),
         }
     }
 
@@ -296,23 +307,36 @@ impl<'a> BoardLayout<'a> {
         assert_eq!(self.rows.len(), 15);
         assert_eq!(self.cols.len(), 15);
         // find out what size our tiles should be
-        let tiles_height: usize = self.rows.iter().map(|&(y0,y1)| y1 - y0).sum();
+        let tiles_height: usize = self.rows.iter().map(|&(y0, y1)| y1 - y0).sum();
         let tiles_width: usize = self.cols.iter().map(|&(x0, x1)| x1 - x0).sum();
         let (tile_height, tile_width) = ((tiles_height as u32) / 15, (tiles_width as u32) / 15);
-        println!("{} {} {} {}", self.board_area.width, self.board_area.height, tile_width, tile_height);
+        println!(
+            "{} {} {} {}",
+            self.board_area.width, self.board_area.height, tile_width, tile_height
+        );
         for &(y0, _y1) in self.rows.iter() {
             for &(x0, _x1) in self.cols.iter() {
-                let cell = Rect{x: x0 as u32, y: y0 as u32, width: tile_width, height: tile_height};
+                let cell = Rect {
+                    x: x0 as u32,
+                    y: y0 as u32,
+                    width: tile_width,
+                    height: tile_height,
+                };
                 cells.push(cell);
             }
         }
         self.cells = cells;
     }
 
-    pub fn get_tile_index(&self) -> Vec<usize> {
+    pub fn get_tile_index(&mut self) {
         let mut index = Vec::new();
-        for (i, cell ) in self.cells.iter().enumerate() {
-            let (left, top,right,bottom) = (cell.x, cell.y, cell.x + cell.width - 1, cell.y + cell.height - 1);
+        for (i, cell) in self.cells.iter().enumerate() {
+            let (left, top, right, bottom) = (
+                cell.x,
+                cell.y,
+                cell.x + cell.width - 1,
+                cell.y + cell.height - 1,
+            );
             let sum = sum_image_pixels(&self.integral, left, top, right, bottom);
             let mean = sum[0] as f64 / (cell.width * cell.height) as f64 / 256.;
             if mean > THRESHOLD {
@@ -320,59 +344,109 @@ impl<'a> BoardLayout<'a> {
             }
             // println!("{:2} {:2} {:.2}", i / 15, i % 15, mean as f64 / 256.);
         }
-        index
+        self.tile_index = index;
     }
 
     /// Create a collage image of all the segmented tiles
     pub fn collage(&self) -> Option<ImageBuffer<Luma<u8>, Vec<u8>>> {
-        let index = self.get_tile_index();
-        if index.is_empty() {
+        if self.tile_index.is_empty() {
             return None;
         }
-        let nimages = index.len() as f64;
+        let nimages = self.tile_index.len() as f64;
         let n = nimages.sqrt().ceil(); // size of collage square
         let (ncols, nrows) = (n as u32, ((nimages / n).ceil()) as u32);
-       
+
         let cell = self.cells[0];
         let (w, h) = (cell.width, cell.height);
-        let mut img: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::new(w * ncols, h * nrows);
-        eprintln!("Create collage {} cols x {} rows, size {},{}", ncols, nrows, img.width(), img.height());
-        for (i, &idx) in index.iter().enumerate() {
+        let mut img: GrayImage = ImageBuffer::new(w * ncols, h * nrows);
+        for (i, &idx) in self.tile_index.iter().enumerate() {
             let cell = self.cells[idx];
             // create destination sub image in collage:
             let (row, col) = ((i as u32 / ncols), (i as u32 % ncols));
-            let mut dest = img.sub_image(col*w, row*h, w, h);
+            let mut dest: SubImage<&mut GrayImage> = img.sub_image(col * w, row * h, w, h);
             // create source sub image
-            let src = self.img.view(cell.x, cell.y, w, h);
+            let src: SubImage<&GrayImage> = self.img.view(cell.x, cell.y, w, h);
             // copy the pixels
             dest.copy_from(&src, 0, 0).unwrap();
-            eprintln!("Tile {}: Copy {}x{} from {},{} to {},{}", i, w,h, cell.x, cell.y, col*w, row*h);
-           
         }
         Some(img)
     }
 
-    pub fn read_templates(&mut self) -> Result<Vec<(String, DynamicImage)>,Error> {
-        let mut entries = fs::read_dir("templates").unwrap()
+    pub fn read_templates(&mut self) -> Result<(), Error> {
+        let mut entries = fs::read_dir("templates")
+            .unwrap()
             .map(|res| res.map(|e| e.path()))
-            .collect::<Result<Vec<_>, io::Error>>().unwrap();
+            .collect::<Result<Vec<_>, io::Error>>()
+            .unwrap();
         entries.sort();
         let mut templates = Vec::new();
         for path in entries {
             if let Some(stem) = path.file_stem() {
                 let key = stem.to_str().unwrap();
-                let template = ImageReader::open(&path).unwrap().decode().unwrap();
+                let template = ImageReader::open(&path)
+                    .unwrap()
+                    .decode()
+                    .unwrap()
+                    .into_luma8();
                 templates.push((String::from(key), template));
             }
         }
-        Ok(templates)
+        self.templates = templates;
+        Ok(())
+    }
+
+    pub fn recognize_tiles(&self, tile_index: &[usize], cells: &[Rect], size: (usize, usize)) -> (Ocr, OcrResult) {
+        if tile_index.is_empty() {
+            println!("No tiles");
+            return (Vec::new(), Vec::new());
+        }
+        // create rows x cols empty grid
+        let (rows, cols) = size;
+        let row: Vec<String> = (0..cols).into_iter().map(|_| String::from(".")).collect();
+        let mut ocr: Vec<Vec<String>> = (0..rows).into_iter().map(|_| row.clone()).collect();
+
+        let mut recognized = Vec::new();
+        for &index in self.tile_index.iter() {
+            // println!("{} match tile at {},{}", i, index % 15, index / 15);
+            let b = cells[index];
+            let (dx, dy, w, h) = (7, 12, 43, 55);
+            let bounds = Rect { x: b.x + dx, y: b.y + dy, width: w, height: h};
+            let tile: GrayImage = self
+                .img
+                .view(bounds.x, bounds.y, bounds.width, bounds.height)
+                .to_image();
+            // match templates
+            let method = MatchTemplateMethod::SumOfSquaredErrorsNormalized;
+            let mut matches = self.templates
+                .iter()
+                .map(|(letter, template)| {
+                    (
+                        letter.clone(),
+                        find_extremes(&match_template(&tile, &template, method)),
+                    )
+                })
+                .collect::<Vec<_>>();
+            // find the best match
+            matches.sort_by(|a, b| a.1.min_value.partial_cmp(&b.1.min_value).unwrap());
+            let (letter, extreme) = matches[0].clone();
+            let (row, col) = (index / cols, index % cols);
+            ocr[row][col] = letter.to_lowercase();
+            recognized.push((index, letter.clone(), extreme));
+            // for (letter, ex) in matches.iter().take(3) {
+            //     println!(
+            //         "  {}: min {:.3} at {:?}",
+            //         letter, ex.min_value, ex.min_value_location
+            //     );
+            // }
+        }
+        (ocr, recognized)
     }
 }
 
 /// This is a modified copy of [imageproc::integral_image::variance]()
 pub fn variance(
-    integral_image: &ImageBuffer<Luma<u64>, Vec<u64>>,
-    integral_squared_image: &ImageBuffer<Luma<u64>, Vec<u64>>,
+    integral_image: &IntegralImage,
+    integral_squared_image: &IntegralImage,
     left: u32,
     top: u32,
     right: u32,
@@ -390,6 +464,7 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use image::io::Reader as ImageReader;
+    use std::time::Instant;
     // use image::imageops;
 
     #[test]
@@ -416,11 +491,25 @@ mod tests {
 
     #[test]
     fn test_templates() -> Result<()> {
-        let img = ImageReader::open("screenshots/screenshot_1080x2160_2.png")?.decode()?;
+        let img = ImageReader::open("screenshots/screenshot_1080x2160_3.png")?.decode()?;
         let gray = img.into_luma8();
         let mut layout = BoardLayout::new(&gray);
-        layout.segment()?; 
+        layout.segment()?;
+        layout.get_cells();
+        layout.get_tile_index();
         layout.read_templates()?;
+        let now = Instant::now();
+        let (ocr, matches) = layout.recognize_tiles(&layout.tile_index, &layout.cells, (15,15));
+        let dt = now.elapsed();
+        println!("match templates took {:?}", dt);
+        let ocr = ocr.into_iter().map(|v| v.join("")).collect::<Vec<String>>().join("\n");
+        println!("{}", ocr);
+        // for (index, letter, ex) in matches.iter() {
+        //     println!(
+        //         "{} {}: min {:.3} at ({}, {})",
+        //         index, letter, ex.min_value, ex.min_value_location.0 + 7, ex.min_value_location.1 + 12,
+        //     );
+        // }
         Ok(())
     }
 }

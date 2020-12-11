@@ -4,3 +4,4 @@ stats/
 screenshots/
 templates/
 *.png
+*.out

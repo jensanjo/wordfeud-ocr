@@ -1,4 +1,4 @@
-use crate::segmenter::Segment;
+use crate::layout::Segment;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

@@ -1,5 +1,7 @@
 mod error;
-mod segmenter;
+mod layout;
+mod recognizer;
 
 pub use error::Error;
-pub use segmenter::BoardLayout;
+pub use layout::Layout;
+pub use recognizer::Board;

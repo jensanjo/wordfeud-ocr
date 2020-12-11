@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use image::{io::Reader as ImageReader, GenericImageView};
 use imageproc::drawing::draw_antialiased_line_segment_mut;
 use imageproc::pixelops::interpolate;
-use wordfeud_ocr::BoardLayout;
+use wordfeud_ocr::Layout;
 
 fn run() -> Result<()> {
     let path = std::env::args().nth(1).unwrap();
@@ -12,7 +12,7 @@ fn run() -> Result<()> {
         .decode()?;
 
     let gray = img.clone().into_luma8();
-    let mut layout = BoardLayout::new(&gray);
+    let mut layout = Layout::new(&gray);
 
     // println!("Tray stats:");
     // let traystats = layout.traystats();

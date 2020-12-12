@@ -2,7 +2,7 @@
 
 * [ ] Recognize tray
 * [ ] Recognize grid
-* [ ] Recognize wildcard
+* [x] Recognize wildcard
 * [ ] Benchmarks
     * [ ] Image load
     * [ ] Layout segmentation

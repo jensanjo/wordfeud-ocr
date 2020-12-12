@@ -22,20 +22,14 @@ fn run() -> Result<()> {
 
     layout.segment()?;
 
-    eprintln!(
-        "board: y0 = {}, height = {}",
-        layout.board_area.y, layout.board_area.height
-    );
+    eprintln!("board area: {:?}", layout.board_area.bounds());
     for (i, &(y0, y1)) in layout.rows.iter().enumerate() {
         eprintln!("  Row {}: {},{} {}", i, y0, y1, y1 - y0);
     }
     for (i, &(x0, x1)) in layout.cols.iter().enumerate() {
         eprintln!("  Col {}: {},{} {}", i, x0, x1, x1 - x0);
     }
-    eprintln!(
-        "Tray: y0 = {}, height = {}",
-        layout.tray_area.y, layout.tray_area.height
-    );
+    eprintln!("Tray area: {:?}", layout.tray_area.bounds());
     for (i, &(x0, x1)) in layout.traycols.iter().enumerate() {
         eprintln!("  Col {}: {},{} {}", i, x0, x1, x1 - x0);
     }
@@ -43,7 +37,7 @@ fn run() -> Result<()> {
     // draw the tile rows in the image
     let red = image::Rgba([255, 0, 0, 255]);
     let blue = image::Rgba([0, 0, 255, 255]);
-    let w = layout.board_area.width as i32;
+    let w = layout.board_area.width() as i32;
     let mut img = img;
     for &(y0, y1) in layout.rows.iter() {
         draw_antialiased_line_segment_mut(
@@ -61,10 +55,8 @@ fn run() -> Result<()> {
             interpolate,
         );
     }
-    let (y0, y1) = (
-        layout.board_area.y as i32,
-        (layout.board_area.y + layout.board_area.height) as i32,
-    );
+    let (_, y, _, h) = layout.board_area.bounds();
+    let (y0, y1) = (y as i32, (y + h) as i32);
     for &(x0, x1) in layout.cols.iter() {
         draw_antialiased_line_segment_mut(
             &mut img,
@@ -81,11 +73,8 @@ fn run() -> Result<()> {
             interpolate,
         );
     }
-
-    let (y0, y1) = (
-        layout.tray_area.y as i32,
-        (layout.tray_area.y + layout.tray_area.height) as i32,
-    );
+    let (_, y, _, h) = layout.tray_area.bounds();
+    let (y0, y1) = (y as i32, (y + h) as i32);
     for &(x0, x1) in layout.traycols.iter() {
         draw_antialiased_line_segment_mut(
             &mut img,
@@ -102,19 +91,10 @@ fn run() -> Result<()> {
             interpolate,
         );
     }
-    let width = layout.board_area.width;
-    let height = layout.board_area.height;
-    let x = layout.board_area.x;
-    let y = layout.board_area.y;
-    let board = img.view(x, y, width, height).to_image();
-    board.save("board.png")?;
 
-    let width = layout.tray_area.width;
-    let height = layout.tray_area.height;
-    let x = layout.tray_area.x;
-    let y = layout.tray_area.y;
-    let tray = img.view(x, y, width, height).to_image();
-    tray.save("tray.png")?;
+    layout.board_area.to_image().save("board.png")?;
+
+    layout.tray_area.to_image().save("tray.png")?;
     Ok(())
 }
 

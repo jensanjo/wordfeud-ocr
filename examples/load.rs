@@ -92,6 +92,8 @@ fn run() -> Result<()> {
         );
     }
 
+    img.save("screenshot.png")?;
+
     layout.board_area.to_image().save("board.png")?;
 
     layout.tray_area.to_image().save("tray.png")?;

@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::layout::{variance, Layout};
 use image::math::Rect;
 use image::{io::Reader as ImageReader, GenericImageView, GrayImage};
+use image::imageops::{resize, FilterType};
 use imageproc::integral_image::sum_image_pixels;
 use imageproc::template_matching::{find_extremes, match_template, MatchTemplateMethod};
 use std::{fs, io};
@@ -13,7 +14,7 @@ pub type OcrResult = Vec<(usize, String, f32, (u32, u32))>;
 pub struct Board<'a> {
     pub img: &'a GrayImage,
     pub layout: Layout<'a>,
-    templates: Vec<(String, GrayImage)>,
+    pub templates: Vec<(String, GrayImage)>,
 }
 
 impl<'a> Board<'a> {
@@ -26,7 +27,7 @@ impl<'a> Board<'a> {
         }
     }
 
-    pub fn read_templates(&mut self) -> Result<(), Error> {
+    pub fn read_templates(mut self) -> Result<Board<'a>, Error> {
         let mut entries = fs::read_dir("templates")
             .unwrap()
             .map(|res| res.map(|e| e.path()))
@@ -46,7 +47,7 @@ impl<'a> Board<'a> {
             }
         }
         self.templates = templates;
-        Ok(())
+        Ok(self)
     }
 
     fn match_template(
@@ -104,11 +105,22 @@ impl<'a> Board<'a> {
         (sum[0] as f64 / count as f64 / 256., var.sqrt() / 256.)
     }
 
+    fn topright(cell: Rect) -> Rect {
+        Rect {
+            x: cell.x + (0.73 * cell.width as f64).round() as u32,
+            y: cell.y + (0.06 * cell.height as f64).round() as u32,
+            width: (0.18 * cell.width as f64).round() as u32,
+            height: (0.27 * cell.height as f64).round() as u32,
+        }
+    }
+
     pub fn recognize_tiles(
         &self,
         tile_index: &[usize],
         cells: &[Rect],
+        templates: &[(String, GrayImage)],
         size: (usize, usize),
+        resize_to: Option<(u32, u32, FilterType)>
     ) -> (Ocr, OcrResult) {
         if tile_index.is_empty() {
             println!("No tiles");
@@ -121,32 +133,31 @@ impl<'a> Board<'a> {
 
         let mut recognized = Vec::new();
         for &index in tile_index.iter() {
-            let b = cells[index];
-            let (dx, dy, w, h) = (7, 13, 43, 52); /* 7, 13, 43, 52 */
-            let bounds = Rect {
-                x: b.x + dx,
-                y: b.y + dy,
-                width: w,
-                height: h,
-            };
+            let cell = cells[index];
+            
             // check if the tile is a wildcard
-            let topright = Rect {
-                x: b.x + 49,
-                y: b.y + 4,
-                width: 12,
-                height: 18,
-            };
+            let topright = Board::topright(cell);
             let (mean, std) = self.stats(topright);
-            // println!("{:2} {:.2} {:.2}", index, mean, std);
-            let wildcard = mean > 0.9 && std < 0.1;
+            let wildcard = mean > 0.8 && std < 0.1;
 
-            let tile: GrayImage = self
+            // create tile image
+            let mut tile: GrayImage = self
                 .img
-                .view(bounds.x, bounds.y, bounds.width, bounds.height)
+                .view(cell.x, cell.y, cell.width, cell.height)
                 .to_image();
+
+            // Tiles in the rack must be resized.
+            if let Some((nwidth, nheight, filter)) = resize_to {
+                tile = resize(&tile, nwidth, nheight, filter);
+            }
+
+            // Area for template matching. Cell dimension is wxh = 67 x 67.
+            // Template dimension is wxh = 38 x 50
+            let area = tile.view(5, 13, 45, 52).to_image();
+    
             // // match templates
             let (letter, min_value, min_value_location) =
-                Board::match_template(&tile, &self.templates);
+                Board::match_template(&area, templates);
             let (row, col) = (index / cols, index % cols);
             ocr[row][col] = if !wildcard {
                 letter.to_lowercase()
@@ -162,31 +173,12 @@ impl<'a> Board<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::collage;
 
     #[test]
-    fn test_tray_cells() -> Result<(), Error> {
-        let path = "screenshots/Screenshot_20201210-124351.png";
-        eprintln!("read image from {}", path);
-        let gray = image::open(&path).unwrap().into_luma8();
-        let mut board = Board::new(&gray);
-        board.layout.segment()?;
-        let cells = board.layout.get_tray_cells();
-        println!("{:?}", cells);
-        Ok(())
-    }
-
-    #[test]
-    fn test_collage() -> Result<(), Error> {
-        let path = "screenshots/Screenshot_20201210-124351.png";
-        eprintln!("read image from {}", path);
-        let gray = image::open(&path).unwrap().into_luma8();
-        let mut board = Board::new(&gray);
-        board.layout.segment()?;
-        let cells = board.layout.get_tray_cells();
-        let coll = collage(&gray, &cells, None).unwrap();
-        coll.save("coll.png").unwrap();
-        println!("{:?}", cells);
-        Ok(())
+    fn test_topright() {
+        let cell = Rect { x: 0, y: 0, width: 67, height: 67 };
+        let topright = Board::topright(cell);
+        println!("{:?} {:?}", cell, topright);
+        assert_eq!(topright, Rect { x:49, y: 4, width: 12, height: 18 });
     }
 }

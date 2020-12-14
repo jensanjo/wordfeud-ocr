@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use wordfeud_ocr::{collage, Board, Layout};
+use wordfeud_ocr::{collage, Layout};
 
 fn run() -> Result<()> {
     let path = std::env::args().nth(1).unwrap();
@@ -8,9 +8,7 @@ fn run() -> Result<()> {
         .with_context(|| format!("Failed to open {}", path))?
         .into_luma8();
     eprintln!("read image from {}", path);
-    let board = Board::new(&gray);
-    let mut layout = board.layout;
-    layout.segment()?;
+    let layout = Layout::new(&gray).segment()?;
     let cells = Layout::get_cells(&layout.rows, &layout.cols);
     let index = layout.get_tile_index(&cells);
     let mut tiles: Vec<_> = index.iter().map(|&i| cells[i]).collect();

@@ -77,7 +77,7 @@ impl<'a> Layout<'a> {
         }
     }
 
-    pub fn segment(&mut self) -> Result<(), Error> {
+    pub fn segment(mut self) -> Result<Self, Error> {
         let mut state = Segment::LookForTopBorder(0);
         let rowstats = self.stats(bounds(self.screen), true);
         let (mut tray_y, mut tray_height) = (0, 0);
@@ -175,7 +175,7 @@ impl<'a> Layout<'a> {
         self.trayrows
             .push((tray_y as usize, (tray_y + tray_height - 1) as usize));
         self.traycols = self.segment_tray_columns()?;
-        Ok(())
+        Ok(self)
     }
 
     fn segment_columns(
@@ -294,6 +294,41 @@ impl<'a> Layout<'a> {
             }
         }
         index
+    }
+
+    /// calculate mean pixel value in rect
+    #[allow(dead_code)]
+    pub fn mean(&self, rect: &Rect) -> f64 {
+        let sum = sum_image_pixels(
+            &self.integral,
+            rect.x,
+            rect.y,
+            rect.x + rect.width - 1,
+            rect.y + rect.height - 1,
+        );
+        let count = rect.width * rect.height;
+        sum[0] as f64 / count as f64 / 256.
+    }
+
+    /// calculate mean and variance pixel value in rect
+    pub fn area_stats(&self, rect: &Rect) -> (f64, f64) {
+        let (left, top, right, bottom) = (
+            rect.x,
+            rect.y,
+            rect.x + rect.width - 1,
+            rect.y + rect.height - 1,
+        );
+        let sum = sum_image_pixels(&self.integral, left, top, right, bottom);
+        let var = variance(
+            &self.integral,
+            &self.integral_squared,
+            left,
+            top,
+            right,
+            bottom,
+        );
+        let count = rect.width * rect.height;
+        (sum[0] as f64 / count as f64 / 256., var.sqrt() / 256.)
     }
 }
 

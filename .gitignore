@@ -2,5 +2,5 @@
 Cargo.lock
 stats/
 screenshots/
-*.png
+/*.png
 *.out

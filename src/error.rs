@@ -1,4 +1,5 @@
 use crate::layout::Segment;
+use std::io;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -8,9 +9,12 @@ pub enum Error {
     #[error("Failed to create layout")]
     LayoutFailed(Segment),
     /// Error reading wordfile
-    #[error("Template \"{path}\" could not be read")]
-    ReadError {
+    #[error("Template could not be read")]
+    TemplateReadError(#[from] io::Error),
+    /// Error decoding image
+    #[error("Image {path} could not be decoded")]
+    ImageError {
         path: String,
-        source: std::io::Error,
+        source: image::error::ImageError,
     },
 }

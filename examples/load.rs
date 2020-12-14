@@ -12,15 +12,13 @@ fn run() -> Result<()> {
         .decode()?;
 
     let gray = img.clone().into_luma8();
-    let mut layout = Layout::new(&gray);
+    let layout = Layout::new(&gray).segment()?;
 
     // println!("Tray stats:");
     // let traystats = layout.traystats();
     // for (i, (mean, var)) in traystats.iter().enumerate() {
     //     println!("{} {} {}", i, mean, var);
     // }
-
-    layout.segment()?;
 
     eprintln!("board area: {:?}", layout.board_area);
     for (i, &(y0, y1)) in layout.rows.iter().enumerate() {

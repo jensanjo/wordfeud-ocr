@@ -6,18 +6,17 @@ pub const THRESHOLD: f64 = 0.65;
 
 type IntegralImage = ImageBuffer<Luma<u64>, Vec<u64>>;
 
-// #[derive(Debug)]
-pub struct Layout<'a> {
-    pub img: &'a GrayImage,
-    pub integral: IntegralImage,
-    pub integral_squared: IntegralImage,
-    pub screen: Rect,
-    pub board_area: Rect,
-    pub tray_area: Rect,
-    pub rows: Vec<(usize, usize)>,
-    pub cols: Vec<(usize, usize)>,
-    pub trayrows: Vec<(usize, usize)>,
-    pub traycols: Vec<(usize, usize)>,
+/// Represents the layout of a wordfeud board
+pub struct Layout {
+     integral: IntegralImage,
+     integral_squared: IntegralImage,
+     pub screen: Rect,
+     pub board_area: Rect,
+     pub tray_area: Rect,
+     pub rows: Vec<(usize, usize)>,
+     pub cols: Vec<(usize, usize)>,
+     pub trayrows: Vec<(usize, usize)>,
+     pub traycols: Vec<(usize, usize)>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -41,8 +40,8 @@ fn bounds(rect: Rect) -> (u32, u32, u32, u32) {
     (rect.x, rect.y, rect.width, rect.height)
 }
 
-impl<'a> Layout<'a> {
-    pub fn new(img: &'a GrayImage) -> Layout<'a> {
+impl Layout {
+    pub fn new(img: &GrayImage) -> Layout {
         let integral: IntegralImage = integral_image::<_, u64>(img);
         let integral_squared: IntegralImage = integral_squared_image::<_, u64>(img);
         let screen = Rect {
@@ -64,7 +63,6 @@ impl<'a> Layout<'a> {
             height: 0,
         };
         Layout {
-            img,
             integral,
             integral_squared,
             screen,

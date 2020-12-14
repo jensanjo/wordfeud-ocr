@@ -8,6 +8,7 @@ use imageproc::template_matching::{find_extremes, match_template, MatchTemplateM
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 
+/// Recognized letters or bonus squares, organized as a two-dimensional grid.
 #[derive(Debug, Clone, Default)]
 pub struct Ocr(pub Vec<Vec<String>>);
 
@@ -24,23 +25,35 @@ impl DerefMut for Ocr {
     }
 }
 
+/// A list of [OcrStat](crate::OcrStat). Can be used to analyze the accuracy of template matching.
 pub type OcrStats = Vec<OcrStat>;
 
+/// Results for a single template match
 #[derive(Debug, Clone, Default)]
 pub struct OcrStat {
+    /// The linear cell index (0.. nrows * ncols)
     index: usize,
+    /// The tag of the matched template
     tag: String,
+    /// The match error (the minimum value of all matched templates)
     min_value: f32,
+    /// The location where the best template match was found
     min_value_location: (u32, u32),
 }
-
+/// Holds the result of recognize_screenshot: recognized tiles on the board and rack, plus grid with bonus squares.
 #[derive(Debug, Clone, Default)]
 pub struct OcrResults {
+    /// The tiles on the board
     pub tiles_ocr: Ocr,
+    /// The grid with bonus squares
     pub grid_ocr: Ocr,
+    /// The tiles on the rack
     pub rack_ocr: Ocr,
+    /// Stats for tile recognition
     pub tiles_stats: OcrStats,
+    /// Stats for grid recognition
     pub grid_stats: OcrStats,
+    /// Stats for rack recognition
     pub rack_stats: OcrStats,
 }
 
@@ -82,7 +95,7 @@ fn template_from_buffer(name: &str, buf: &[u8]) -> (String, GrayImage) {
     )
 }
 
-// #[derive(Debug)]
+/// Wordfeud board recognizer
 pub struct Board {
     pub templates: Vec<(String, GrayImage)>,
     pub bonus_templates: Vec<(String, GrayImage)>,
@@ -93,7 +106,8 @@ impl Default for Board {
         Board::new()
     }
 }
-impl<'a> Board {
+
+impl Board {
     pub fn new() -> Board {
         let templates = LETTER_TEMPLATES
             .iter()
@@ -109,7 +123,18 @@ impl<'a> Board {
         }
     }
 
-    pub fn recognize_screenshot(&self, screenshot: &'a GrayImage) -> Result<OcrResults, Error> {
+    /// Recognize a wordfeud board screenshot.
+    ///
+    /// Returns a result that contains the detected tiles on the board and in the rack, and the detected board with
+    /// the bonus tiles locations.
+    /// The recognition process consists of these phases:
+    /// 1. Segmentation of the board: find the board and rack area, and locate the cells on the board and the rack
+    /// 2. Use template matching to recognize the tiles and bonus squares
+    ///
+    /// # Errors
+    /// * The screenshot can not be segmented properly
+    /// 
+    pub fn recognize_screenshot(&self, screenshot: &GrayImage) -> Result<OcrResults, Error> {
         let layout = Layout::new(&screenshot).segment()?;
 
         let cells = Layout::get_cells(&layout.rows, &layout.cols);

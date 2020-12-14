@@ -1,5 +1,5 @@
 use crate::error::Error;
-use image::{GenericImageView, GrayImage, ImageBuffer, Luma, SubImage, math::Rect};
+use image::{math::Rect, GrayImage, ImageBuffer, Luma};
 use imageproc::integral_image::{integral_image, integral_squared_image, sum_image_pixels};
 
 pub const THRESHOLD: f64 = 0.65;
@@ -11,12 +11,9 @@ pub struct Layout<'a> {
     pub img: &'a GrayImage,
     pub integral: IntegralImage,
     pub integral_squared: IntegralImage,
-    /// View into the entire screenshot
-    pub screen: SubImage<&'a GrayImage>,
-    /// View into the board area
-    pub board_area: SubImage<&'a GrayImage>,
-    /// View into the tray area
-    pub tray_area: SubImage<&'a GrayImage>,
+    pub screen: Rect,
+    pub board_area: Rect,
+    pub tray_area: Rect,
     pub rows: Vec<(usize, usize)>,
     pub cols: Vec<(usize, usize)>,
     pub trayrows: Vec<(usize, usize)>,
@@ -40,13 +37,32 @@ fn close(a: u32, b: u32, tol: u32) -> bool {
     (a as i32 - b as i32).abs() < tol as i32
 }
 
+fn bounds(rect: Rect) -> (u32, u32, u32, u32) {
+    (rect.x, rect.y, rect.width, rect.height)
+}
+
 impl<'a> Layout<'a> {
     pub fn new(img: &'a GrayImage) -> Layout<'a> {
         let integral: IntegralImage = integral_image::<_, u64>(img);
         let integral_squared: IntegralImage = integral_squared_image::<_, u64>(img);
-        let screen: SubImage<&GrayImage> = img.view(0, 0, img.width(), img.height());
-        let board_area: SubImage<&GrayImage> = img.view(0, 0, 0, 0);
-        let tray_area: SubImage<&GrayImage> = img.view(0, 0, 0, 0);
+        let screen = Rect {
+            x: 0,
+            y: 0,
+            width: img.width(),
+            height: img.height(),
+        };
+        let board_area = Rect {
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+        };
+        let tray_area = Rect {
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0,
+        };
         Layout {
             img,
             integral,
@@ -63,7 +79,7 @@ impl<'a> Layout<'a> {
 
     pub fn segment(&mut self) -> Result<(), Error> {
         let mut state = Segment::LookForTopBorder(0);
-        let rowstats = self.stats(self.screen.bounds(), true);
+        let rowstats = self.stats(bounds(self.screen), true);
         let (mut tray_y, mut tray_height) = (0, 0);
         let tol = 2;
         for (i, &(sum, var)) in rowstats.iter().enumerate() {
@@ -132,16 +148,22 @@ impl<'a> Layout<'a> {
         }
         let y0 = self.rows[0].0 as u32;
         let y1 = self.rows[14].1 as u32;
-        self.board_area
-            .change_bounds(0, y0, self.img.width(), y1 - y0);
+        self.board_area = Rect {
+            x: 0,
+            y: y0,
+            width: self.screen.width,
+            height: y1 - y0,
+        };
+        self.tray_area = Rect {
+            x: 0,
+            y: tray_y,
+            width: self.screen.width,
+            height: tray_height,
+        };
 
-        self.tray_area
-            .change_bounds(0, tray_y, self.img.width(), tray_height);
-
-        // let mean_tile_width = (self.board.1 - self.board.0) / 15;
         // the board area should be approximately square
-        let w = self.board_area.width();
-        let h = self.board_area.height();
+        let w = self.board_area.width;
+        let h = self.board_area.height;
         let aspect_ratio = h as f32 / w as f32;
         if (aspect_ratio - 1.0).abs() > 0.02 {
             return Err(Error::BoardNotSquare(aspect_ratio));
@@ -149,13 +171,18 @@ impl<'a> Layout<'a> {
         self.cols = self.segment_board_columns()?;
         if state != Segment::Done {
             return Err(Error::LayoutFailed(state));
-        }        
-        self.trayrows.push((tray_y as usize, (tray_y + tray_height - 1) as usize));
+        }
+        self.trayrows
+            .push((tray_y as usize, (tray_y + tray_height - 1) as usize));
         self.traycols = self.segment_tray_columns()?;
         Ok(())
     }
 
-    fn segment_columns(threshold: u32, maxcols: usize, colstats: &[(u32, u32)]) -> Result<Vec<(usize, usize)>, Error> {
+    fn segment_columns(
+        threshold: u32,
+        maxcols: usize,
+        colstats: &[(u32, u32)],
+    ) -> Result<Vec<(usize, usize)>, Error> {
         let mut cols = Vec::new();
         let mut state = Segment::LookForRisingEdge(0);
         let tol = 2;
@@ -171,7 +198,7 @@ impl<'a> Layout<'a> {
                 Segment::InTile(n) => {
                     if close(sum, 24, tol) && (var == 0) {
                         cols[n].1 = i - 1;
-                        if n + 1< maxcols {
+                        if n + 1 < maxcols {
                             state = Segment::LookForRisingEdge(n + 1);
                         } else {
                             state = Segment::Done;
@@ -186,14 +213,14 @@ impl<'a> Layout<'a> {
         //     return Err(Error::LayoutFailed(state));
         // }
         Ok(cols)
-    }    
+    }
     fn segment_board_columns(&self) -> Result<Vec<(usize, usize)>, Error> {
-        let colstats = self.stats(self.board_area.bounds(), false);
+        let colstats = self.stats(bounds(self.board_area), false);
         Self::segment_columns(24, 15, &colstats)
     }
 
     fn segment_tray_columns(&self) -> Result<Vec<(usize, usize)>, Error> {
-        let colstats = self.stats(self.tray_area.bounds(), false);
+        let colstats = self.stats(bounds(self.tray_area), false);
         Self::segment_columns(48, 7, &colstats)
     }
 
@@ -225,7 +252,7 @@ impl<'a> Layout<'a> {
     }
 
     /// Create tile sub images for board
-    pub fn get_cells(rows: &[(usize,usize)], cols: &[(usize, usize)] ) -> Vec<Rect> {
+    pub fn get_cells(rows: &[(usize, usize)], cols: &[(usize, usize)]) -> Vec<Rect> {
         let mut cells = Vec::new();
         if cols.is_empty() {
             return cells;
@@ -233,8 +260,10 @@ impl<'a> Layout<'a> {
         // find out what size our tiles should be
         let tiles_height: usize = rows.iter().map(|&(y0, y1)| y1 - y0).sum();
         let tiles_width: usize = cols.iter().map(|&(x0, x1)| x1 - x0).sum();
-        // let (tile_height, tile_width) = ((tiles_height  / rows.len() as u32, (tiles_width as u32) / 15);
-        let (tile_height, tile_width) = ((tiles_height  / rows.len()) as u32, (tiles_width / cols.len()) as u32);
+        let (tile_height, tile_width) = (
+            (tiles_height / rows.len()) as u32,
+            (tiles_width / cols.len()) as u32,
+        );
         for &(y0, _y1) in rows.iter() {
             for &(x0, _x1) in cols.iter() {
                 let cell = Rect {
@@ -252,7 +281,12 @@ impl<'a> Layout<'a> {
     pub fn get_tile_index(&self, cells: &[Rect]) -> Vec<usize> {
         let mut index = Vec::new();
         for (i, &cell) in cells.iter().enumerate() {
-            let (left, top, right, bottom) = (cell.x, cell.y,  cell.x + cell.width - 1, cell.y + cell.height - 1);
+            let (left, top, right, bottom) = (
+                cell.x,
+                cell.y,
+                cell.x + cell.width - 1,
+                cell.y + cell.height - 1,
+            );
             let sum = sum_image_pixels(&self.integral, left, top, right, bottom);
             let mean = sum[0] as f64 / (cell.width * cell.height) as f64 / 256.;
             if mean > THRESHOLD {

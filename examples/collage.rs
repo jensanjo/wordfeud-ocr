@@ -14,7 +14,7 @@ fn run() -> Result<()> {
     let cells = Layout::get_cells(&layout.rows, &layout.cols);
     let index = layout.get_tile_index(&cells);
     let mut tiles: Vec<_> = index.iter().map(|&i| cells[i]).collect();
-    
+
     // get tray tiles and resize them to match the board tiles.
     let cells = Layout::get_cells(&layout.trayrows, &layout.traycols);
     tiles.extend(cells);

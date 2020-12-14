@@ -25,7 +25,6 @@ impl DerefMut for Ocr {
 }
 
 pub type OcrStats = Vec<OcrStat>;
-// pub type OcrResult = Vec<(usize, String, f32, (u32, u32))>;
 
 #[derive(Debug, Clone, Default)]
 pub struct OcrStat {
@@ -79,7 +78,7 @@ const BONUS_TEMPLATES: &[(&str, &[u8])] = &templates!["2L", "3L", "2W", "3W"];
 fn template_from_buffer(name: &str, buf: &[u8]) -> (String, GrayImage) {
     (
         String::from(name),
-        image::load_from_memory(buf).unwrap().to_luma8(),
+        image::load_from_memory(buf).unwrap().to_luma8(), // can not fail because the templates are embedded
     )
 }
 

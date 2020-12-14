@@ -5,7 +5,7 @@ use imageproc::pixelops::interpolate;
 use wordfeud_ocr::Layout;
 
 fn run() -> Result<()> {
-    let path = std::env::args().nth(1).unwrap();
+    let path = std::env::args().nth(1).expect("Usage: load SCREENSHOT");
     eprintln!("read image from {}", path);
     let img = ImageReader::open(&path)
         .with_context(|| format!("Failed to open {}", path))?

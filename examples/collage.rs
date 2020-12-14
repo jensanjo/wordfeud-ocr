@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use wordfeud_ocr::{collage, Layout};
 
 fn run() -> Result<()> {
-    let path = std::env::args().nth(1).unwrap();
+    let path = std::env::args().nth(1).expect("Usage: collage SCREENSHOT");
 
     let gray = image::open(&path)
         .with_context(|| format!("Failed to open {}", path))?
@@ -17,10 +17,8 @@ fn run() -> Result<()> {
     let cells = Layout::get_cells(&layout.trayrows, &layout.traycols);
     tiles.extend(cells);
 
-    if let Some(collage) = collage(&gray, &tiles, None) {
-        // let resized = imageops::resize(&collage, 640, 576, imageops::FilterType::Triangle);
-        collage.save("collage.png")?;
-    }
+    let collage = collage(&gray, &tiles, None);
+    collage.save("collage.png")?;
 
     Ok(())
 }

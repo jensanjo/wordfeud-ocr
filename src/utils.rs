@@ -6,14 +6,14 @@ use std::path::{Path, PathBuf};
 
 /// Create a collage from parts of a source image.
 /// TODO: All parts must be the same size
-pub fn collage(source: &GrayImage, parts: &[Rect], maxrows: Option<u32>) -> Option<GrayImage> {
+pub fn collage(source: &GrayImage, parts: &[Rect], maxrows: Option<u32>) -> GrayImage {
     if parts.is_empty() {
-        return None;
+        return GrayImage::new(0,0);
     }
     let nimages = parts.len();
     let mut nrows = (nimages as f64).sqrt().floor() as u32; // size of collage square
     if let Some(maxrows) = maxrows {
-        nrows = maxrows;
+        nrows = std::cmp::min(nrows, maxrows);
     }
     let ncols = (nimages as f64 / nrows as f64).ceil() as u32;
     let cell = parts[0];
@@ -35,7 +35,7 @@ pub fn collage(source: &GrayImage, parts: &[Rect], maxrows: Option<u32>) -> Opti
             dest.copy_from(&src, 0, 0).unwrap();
         }
     }
-    Some(collage)
+    collage
 }
 
 /// Save tiles as templates

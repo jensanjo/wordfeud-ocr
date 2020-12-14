@@ -1,7 +1,6 @@
 mod error;
 mod layout;
 mod recognizer;
-mod test;
 mod utils;
 
 pub use error::Error;

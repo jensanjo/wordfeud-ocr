@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// TODO: All parts must be the same size
 pub fn collage(source: &GrayImage, parts: &[Rect], maxrows: Option<u32>) -> GrayImage {
     if parts.is_empty() {
-        return GrayImage::new(0,0);
+        return GrayImage::new(0, 0);
     }
     let nimages = parts.len();
     let mut nrows = (nimages as f64).sqrt().floor() as u32; // size of collage square

@@ -3,7 +3,6 @@ use std::time::Instant;
 use wordfeud_ocr::Board;
 
 fn test_recognize_screenshot(screenshot_path: &str, expect: &str) -> Result<()> {
-    
     let img = image::open(&screenshot_path)
         .with_context(|| format!("Failed to open {}", screenshot_path))?;
     let gray = img.into_luma8();

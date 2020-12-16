@@ -4,7 +4,9 @@ use std::time::Instant;
 use wordfeud_ocr::Board;
 
 fn run() -> Result<()> {
-    let path = std::env::args().nth(1).expect("Usage: recognize SCREENSHOT");
+    let path = std::env::args()
+        .nth(1)
+        .expect("Usage: recognize SCREENSHOT");
     let t0 = Instant::now();
     let img = image::open(&path).with_context(|| format!("Failed to open {}", path))?;
     let gray = img.into_luma8();

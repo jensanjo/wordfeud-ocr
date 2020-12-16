@@ -41,7 +41,7 @@ pub struct OcrStat {
     min_value_location: (u32, u32),
 }
 /// Holds the result of recognize_screenshot: recognized tiles on the board and rack, plus grid with bonus squares.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct OcrResults {
     /// The tiles on the board
     pub tiles_ocr: Ocr,
@@ -55,6 +55,10 @@ pub struct OcrResults {
     pub grid_stats: OcrStats,
     /// Stats for rack recognition
     pub rack_stats: OcrStats,
+    /// Board area bounding rectangle
+    pub board_area: Rect,
+    /// Rack area bounding rectangle
+    pub rack_area: Rect,
 }
 
 impl fmt::Display for Ocr {
@@ -133,7 +137,7 @@ impl Board {
     ///
     /// # Errors
     /// * The screenshot can not be segmented properly
-    /// 
+    ///
     pub fn recognize_screenshot(&self, screenshot: &GrayImage) -> Result<OcrResults, Error> {
         let layout = Layout::new(&screenshot).segment()?;
 
@@ -152,16 +156,10 @@ impl Board {
         let (grid_ocr, grid_stats) =
             self.recognize_board(screenshot, &layout, &cells, &self.bonus_templates, (15, 15));
 
-        let cells = Layout::get_cells(&layout.trayrows, &layout.traycols);
+        let cells = Layout::get_cells(&layout.rack_rows, &layout.rack_cols);
         let index: Vec<usize> = (0..cells.len()).into_iter().collect();
-        let (rack_ocr, rack_stats) = self.recognize_tiles(
-            screenshot,
-            &layout,
-            &index,
-            &cells,
-            &self.templates,
-            (1, 7),
-        );
+        let (rack_ocr, rack_stats) =
+            self.recognize_tiles(screenshot, &layout, &index, &cells, &self.templates, (1, 7));
 
         let res = OcrResults {
             tiles_ocr,
@@ -170,9 +168,27 @@ impl Board {
             tiles_stats,
             grid_stats,
             rack_stats,
+            board_area: layout.board_area,
+            rack_area: layout.rack_area,
         };
 
         Ok(res)
+    }
+
+    pub fn recognize_screenshot_from_file(
+        &self,
+        screenshot_filename: &str,
+    ) -> Result<OcrResults, Error> {
+        let gray = image::open(&screenshot_filename)?.into_luma8();
+        self.recognize_screenshot(&gray)
+    }
+
+    pub fn recognize_screenshot_from_memory(
+        &self,
+        screenshot: &[u8],
+    ) -> Result<OcrResults, Error> {
+        let gray = image::load_from_memory(&screenshot)?.into_luma8();
+        self.recognize_screenshot(&gray)
     }
 
     fn topright(cell: Rect) -> Rect {
@@ -210,10 +226,14 @@ impl Board {
         for &index in tile_index.iter() {
             let cell = cells[index];
 
+            // check if the tile is a blank (in the rack)
+            let (mean, std) = layout.area_stats(&cell);
+            let is_blank = mean > 0.9 && std < 0.2;
+          
             // check if the tile is a wildcard
             let topright = Board::topright(cell);
             let (mean, std) = layout.area_stats(&topright);
-            let wildcard = mean > 0.8 && std < 0.1;
+            let is_wildcard = mean > 0.8 && std < 0.1;
 
             // create tile image
             let mut tile: GrayImage = img.view(cell.x, cell.y, cell.width, cell.height).to_image();
@@ -221,17 +241,22 @@ impl Board {
             tile = threshold(&tile, thresh);
 
             if tile.width() > 67 {
-                tile = resize(&tile, 67, 67, FilterType::Lanczos3);          
+                tile = resize(&tile, 67, 67, FilterType::Lanczos3);
             }
 
             // Area for template matching. Cell dimension is 67 square
             // Template dimension is wxh = 38 x 50
             let area = tile.view(6, 3, 40, 62).to_image();
 
-            // // match templates
-            let (letter, min_value, min_value_location) = Board::match_template(&area, templates);
+            
+            // match templates
+            let (letter, min_value, min_value_location) = if ! is_blank {
+                Board::match_template(&area, templates)
+            } else {
+                (String::from("*"), 0.0_f32, (0_u32,0_u32))
+            };
             let (row, col) = (index / cols, index % cols);
-            ocr[row][col] = if !wildcard {
+            ocr[row][col] = if !is_wildcard {
                 letter.to_lowercase()
             } else {
                 letter.clone()
@@ -262,7 +287,7 @@ impl Board {
             .into_iter()
             .map(|_| row.clone())
             .collect::<Vec<_>>());
-
+        ocr[7][7] = String::from("ss"); // start square
         let mut stats = Vec::new();
         for (index, cell) in cells.iter().enumerate() {
             let mean = layout.mean(&cell);
@@ -280,10 +305,10 @@ impl Board {
             // // match templates
             let (letter, min_value, min_value_location) = Board::match_template(&area, templates);
             let (row, col) = (index / cols, index % cols);
-            ocr[row][col] = letter.clone();
+            ocr[row][col] = letter.to_lowercase();
             stats.push(OcrStat {
                 index,
-                tag: letter.clone(),
+                tag: letter.to_lowercase(),
                 min_value,
                 min_value_location,
             });
@@ -295,6 +320,7 @@ impl Board {
         tile: &GrayImage,
         templates: &[(String, GrayImage)],
     ) -> (String, f32, (u32, u32)) {
+         
         let method = MatchTemplateMethod::SumOfSquaredErrorsNormalized;
         let mut matches = templates
             .iter()

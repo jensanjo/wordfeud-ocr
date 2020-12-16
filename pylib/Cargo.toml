@@ -1,0 +1,17 @@
+[package]
+name = "pywordfeud_ocr"
+version = "0.1.0"
+authors = ["Joep Jansen <joep.w.jansen@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+wordfeud-ocr = { path = "../lib" }
+
+[dependencies.pyo3]
+version = "0.12.4"
+features = ["extension-module"]
+
+[lib]
+name = "pywordfeud_ocr"
+path = "src/lib.rs"
+crate-type = ["cdylib"]

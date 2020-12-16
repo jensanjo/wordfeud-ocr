@@ -13,5 +13,4 @@ pub enum Error {
     /// An error from the [image](https://github.com/image-rs/image) library
     #[error("Image error")]
     ImageError(#[from] image::error::ImageError),
-    
 }

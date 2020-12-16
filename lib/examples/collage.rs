@@ -13,8 +13,8 @@ fn run() -> Result<()> {
     let index = layout.get_tile_index(&cells);
     let mut tiles: Vec<_> = index.iter().map(|&i| cells[i]).collect();
 
-    // get tray tiles and resize them to match the board tiles.
-    let cells = Layout::get_cells(&layout.trayrows, &layout.traycols);
+    // get rack tiles and resize them to match the board tiles.
+    let cells = Layout::get_cells(&layout.rack_rows, &layout.rack_cols);
     tiles.extend(cells);
 
     let collage = collage(&gray, &tiles, None);

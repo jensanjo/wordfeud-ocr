@@ -1,6 +1,6 @@
 # TODO
 
-* [ ] Recognize tray
+* [ ] Recognize rack
 * [ ] Recognize grid
 * [x] Recognize wildcard
 * [ ] Benchmarks

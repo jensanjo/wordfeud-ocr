@@ -14,9 +14,9 @@ fn run() -> Result<()> {
     let gray = img.clone().into_luma8();
     let layout = Layout::new(&gray).segment()?;
 
-    // println!("Tray stats:");
-    // let traystats = layout.traystats();
-    // for (i, (mean, var)) in traystats.iter().enumerate() {
+    // println!("rack stats:");
+    // let rackstats = layout.rackstats();
+    // for (i, (mean, var)) in rackstats.iter().enumerate() {
     //     println!("{} {} {}", i, mean, var);
     // }
 
@@ -27,8 +27,8 @@ fn run() -> Result<()> {
     for (i, &(x0, x1)) in layout.cols.iter().enumerate() {
         eprintln!("  Col {}: {},{} {}", i, x0, x1, x1 - x0);
     }
-    eprintln!("Tray area: {:?}", layout.tray_area);
-    for (i, &(x0, x1)) in layout.traycols.iter().enumerate() {
+    eprintln!("rack area: {:?}", layout.rack_area);
+    for (i, &(x0, x1)) in layout.rack_cols.iter().enumerate() {
         eprintln!("  Col {}: {},{} {}", i, x0, x1, x1 - x0);
     }
 
@@ -71,9 +71,9 @@ fn run() -> Result<()> {
             interpolate,
         );
     }
-    let (y, h) = (layout.tray_area.y, layout.tray_area.height);
+    let (y, h) = (layout.rack_area.y, layout.rack_area.height);
     let (y0, y1) = (y as i32, (y + h) as i32);
-    for &(x0, x1) in layout.traycols.iter() {
+    for &(x0, x1) in layout.rack_cols.iter() {
         draw_antialiased_line_segment_mut(
             &mut img,
             (x0 as i32, y0),
@@ -97,10 +97,10 @@ fn run() -> Result<()> {
         .to_image()
         .save("board.png")?;
 
-    let r = layout.tray_area;
+    let r = layout.rack_area;
     img.view(r.x, r.y, r.width, r.height)
         .to_image()
-        .save("tray.png")?;
+        .save("rack.png")?;
     Ok(())
 }
 

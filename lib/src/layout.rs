@@ -8,15 +8,15 @@ type IntegralImage = ImageBuffer<Luma<u64>, Vec<u64>>;
 
 /// Represents the layout of a wordfeud board
 pub struct Layout {
-     integral: IntegralImage,
-     integral_squared: IntegralImage,
-     pub screen: Rect,
-     pub board_area: Rect,
-     pub tray_area: Rect,
-     pub rows: Vec<(usize, usize)>,
-     pub cols: Vec<(usize, usize)>,
-     pub trayrows: Vec<(usize, usize)>,
-     pub traycols: Vec<(usize, usize)>,
+    integral: IntegralImage,
+    integral_squared: IntegralImage,
+    pub screen: Rect,
+    pub board_area: Rect,
+    pub rack_area: Rect,
+    pub rows: Vec<(usize, usize)>,
+    pub cols: Vec<(usize, usize)>,
+    pub rack_rows: Vec<(usize, usize)>,
+    pub rack_cols: Vec<(usize, usize)>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -27,8 +27,8 @@ pub enum Segment {
     InTile(usize),
     LookForBottomBorder(usize),
     InBottomBorder,
-    LookForTray,
-    InTray,
+    LookForRack,
+    InRack,
     Done,
 }
 
@@ -56,7 +56,7 @@ impl Layout {
             width: 0,
             height: 0,
         };
-        let tray_area = Rect {
+        let rack_area = Rect {
             x: 0,
             y: 0,
             width: 0,
@@ -67,18 +67,18 @@ impl Layout {
             integral_squared,
             screen,
             board_area,
-            tray_area,
+            rack_area,
             rows: Vec::new(),
             cols: Vec::new(),
-            trayrows: Vec::new(),
-            traycols: Vec::new(),
+            rack_rows: Vec::new(),
+            rack_cols: Vec::new(),
         }
     }
 
     pub fn segment(mut self) -> Result<Self, Error> {
         let mut state = Segment::LookForTopBorder(0);
         let rowstats = self.stats(bounds(self.screen), true);
-        let (mut tray_y, mut tray_height) = (0, 0);
+        let (mut rack_y, mut rack_height) = (0, 0);
         let tol = 2;
         for (i, &(sum, var)) in rowstats.iter().enumerate() {
             match state {
@@ -121,19 +121,19 @@ impl Layout {
                 }
                 Segment::InBottomBorder => {
                     if close(sum, 24, tol) && (var < 10) {
-                        state = Segment::LookForTray;
+                        state = Segment::LookForRack;
                     }
                 }
-                Segment::LookForTray => {
+                Segment::LookForRack => {
                     if var > 100 {
-                        tray_y = i as u32;
-                        state = Segment::InTray;
+                        rack_y = i as u32;
+                        state = Segment::InRack;
                     }
                 }
-                Segment::InTray => {
-                    // println!("{}: Intray: {} {}", i, sum, var);
+                Segment::InRack => {
+                    // println!("{}: Inrack: {} {}", i, sum, var);
                     if close(sum, 24, tol) && (var == 0) {
-                        tray_height = i as u32 - tray_y;
+                        rack_height = i as u32 - rack_y;
                         // println!("Done!");
                         state = Segment::Done;
                     }
@@ -152,11 +152,11 @@ impl Layout {
             width: self.screen.width,
             height: y1 - y0,
         };
-        self.tray_area = Rect {
+        self.rack_area = Rect {
             x: 0,
-            y: tray_y,
+            y: rack_y,
             width: self.screen.width,
-            height: tray_height,
+            height: rack_height,
         };
 
         // the board area should be approximately square
@@ -170,9 +170,9 @@ impl Layout {
         if state != Segment::Done {
             return Err(Error::LayoutFailed(state));
         }
-        self.trayrows
-            .push((tray_y as usize, (tray_y + tray_height - 1) as usize));
-        self.traycols = self.segment_tray_columns()?;
+        self.rack_rows
+            .push((rack_y as usize, (rack_y + rack_height - 1) as usize));
+        self.rack_cols = self.segment_rack_columns()?;
         Ok(self)
     }
 
@@ -217,8 +217,8 @@ impl Layout {
         Self::segment_columns(24, 15, &colstats)
     }
 
-    fn segment_tray_columns(&self) -> Result<Vec<(usize, usize)>, Error> {
-        let colstats = self.stats(bounds(self.tray_area), false);
+    fn segment_rack_columns(&self) -> Result<Vec<(usize, usize)>, Error> {
+        let colstats = self.stats(bounds(self.rack_area), false);
         Self::segment_columns(48, 7, &colstats)
     }
 

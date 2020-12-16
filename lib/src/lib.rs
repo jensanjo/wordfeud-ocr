@@ -1,7 +1,7 @@
 //! An OCR library that reads the state of a Wordfeud board from a screenshot
 //!
 //! This library recognizes the tiles on a Wordfeud board and rack, and also the bonus squares on the board.
-//! 
+//!
 //! # Basic usage
 //! ```no_run
 //! # use wordfeud_ocr::{Board, Error};
@@ -21,5 +21,5 @@ mod utils;
 
 pub use error::Error;
 pub use layout::Layout;
-pub use recognizer::{Board, Ocr, OcrStat, OcrStats, OcrResults};
+pub use recognizer::{Board, Ocr, OcrResults, OcrStat, OcrStats};
 pub use utils::{collage, save_templates};

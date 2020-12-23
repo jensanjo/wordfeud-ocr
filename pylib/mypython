@@ -1,0 +1,9 @@
+#!/bin/bash
+# work around maturin cross compilation issue
+# ref: https://github.com/PyO3/maturin/issues/375
+
+if [[ $2 == import* ]]; then
+	echo '{"major": 3, "minor": 8, "abiflags": "", "interpreter": "cpython", "ext_suffix": ".cpython-38-arm-linux-gnueabihf.so", "abi_tag": "38", "m": true, "u": false, "d": false, "platform": "linux"}'
+else
+	exec /usr/bin/python3 "$@"
+fi

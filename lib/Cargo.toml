@@ -2,6 +2,9 @@
 authors = ["Joep Jansen <joep.w.jansen@gmail.com>"]
 edition = "2018"
 name = "wordfeud-ocr"
+description = "A Rust library that recognizes a screenshot from the Wordfeud game on Android phone."
+license = "MIT OR Apache-2.0"
+readme = "../README.md"
 version = "0.1.0"
 
 [dependencies]

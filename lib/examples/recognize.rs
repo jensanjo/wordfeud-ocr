@@ -13,9 +13,15 @@ fn run() -> Result<()> {
     // let layout = Layout::new(&gray).segment()?;
     let board = Board::new();
 
-    let res = board.recognize_screenshot(&gray);
+    let res = board.recognize_screenshot(&gray)?;
     println!("recognize screenshot took {:?}", t0.elapsed());
     println!("{:?}", res);
+
+    // save templates
+    use wordfeud_ocr::{Layout, save_templates};
+    let layout = Layout::new(&gray).segment()?;
+    let cells = Layout::get_cells(&layout.rows, &layout.cols);
+    save_templates("out", &gray, &cells, &res.tiles_ocr);
     Ok(())
 }
 

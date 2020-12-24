@@ -183,10 +183,7 @@ impl Board {
         self.recognize_screenshot(&gray)
     }
 
-    pub fn recognize_screenshot_from_memory(
-        &self,
-        screenshot: &[u8],
-    ) -> Result<OcrResults, Error> {
+    pub fn recognize_screenshot_from_memory(&self, screenshot: &[u8]) -> Result<OcrResults, Error> {
         let gray = image::load_from_memory(&screenshot)?.into_luma8();
         self.recognize_screenshot(&gray)
     }
@@ -229,7 +226,7 @@ impl Board {
             // check if the tile is a blank (in the rack)
             let (mean, std) = layout.area_stats(&cell);
             let is_blank = mean > 0.9 && std < 0.2;
-          
+
             // check if the tile is a wildcard
             let topright = Board::topright(cell);
             let (mean, std) = layout.area_stats(&topright);
@@ -248,12 +245,11 @@ impl Board {
             // Template dimension is wxh = 38 x 50
             let area = tile.view(6, 3, 40, 62).to_image();
 
-            
             // match templates
-            let (letter, min_value, min_value_location) = if ! is_blank {
+            let (letter, min_value, min_value_location) = if !is_blank {
                 Board::match_template(&area, templates)
             } else {
-                (String::from("*"), 0.0_f32, (0_u32,0_u32))
+                (String::from("*"), 0.0_f32, (0_u32, 0_u32))
             };
             let (row, col) = (index / cols, index % cols);
             ocr[row][col] = if !is_wildcard {
@@ -320,7 +316,6 @@ impl Board {
         tile: &GrayImage,
         templates: &[(String, GrayImage)],
     ) -> (String, f32, (u32, u32)) {
-         
         let method = MatchTemplateMethod::SumOfSquaredErrorsNormalized;
         let mut matches = templates
             .iter()

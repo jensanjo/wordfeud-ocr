@@ -5,7 +5,7 @@ name = "wordfeud-ocr"
 description = "A Rust library that recognizes a screenshot from the Wordfeud game on Android phone."
 license = "MIT OR Apache-2.0"
 readme = "../README.md"
-version = "0.1.0"
+version = "0.1.1"
 
 [dependencies]
 thiserror = "1.0"

@@ -51,17 +51,15 @@ Tiles:
 
 Here is an example screenshot, with the grid lines marked in red (start) and blue (end). **NOTE**: the images are shown here in reduced size.
 
-![example screenshot](images/screenshot-resized.png)
+![example screenshot](https://github.com/jensanjo/wordfeud-ocr/raw/master/images/screenshot-resized.png)
 
 ## Board area
 Here is the resulting board:
 
-![example screenshot](images/board-resized.png)
+![example screenshot](https://github.com/jensanjo/wordfeud-ocr/raw/master/images/board-resized.png)
 
 ## Rack area
 And the tiles in the rack:
-
-![rack area](images/rack-resized.png)
 
 # Template matching
 
@@ -70,12 +68,12 @@ And the tiles in the rack:
 After the cells are located in the board each cell is checked if it is a grid cell (possibly with a letter or word bonus) or if it contains a letter tile. The distinction is made by looking at the mean pixel value in the cell. 
 The following collage (produced by the `collage.rs` example program) shows the result:
 
-![collage](images/collage.png)
+![collage](https://github.com/jensanjo/wordfeud-ocr/raw/master/images/collage.png)
 
 To recognize the tiles, we match each tile with each of a set of letter templates, and find the best match.
 The templates have a size of 38x60 (wxh) pixels.
 
-![letter templates](images/templates.png)
+![letter templates](https://github.com/jensanjo/wordfeud-ocr/raw/master/images/templates.png)
 
 For the curious: The collage is produced by the `Imagemagick` [montage](https://legacy.imagemagick.org/Usage/montage/) tool:
 
@@ -90,7 +88,7 @@ In a similar manner, the grid cells are recognized.
 First we find the cells that have a bonus, by looking at the mean pixel value.
 Then each bonus cell is matched a set of bonus templates:
 
-![bonus templates](images/bonus.png)
+![bonus templates](https://github.com/jensanjo/wordfeud-ocr/raw/master/images/bonus.png)
 
 
 

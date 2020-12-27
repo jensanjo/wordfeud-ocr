@@ -1,7 +1,6 @@
 # Wordfeud OCR
-![Crates.io](https://img.shields.io/crates/l/wordfeud-ocr)
-![Crates.io](https://img.shields.io/crates/v/wordfeud-ocr)
-[![Documentation](https://docs.rs/wordfeud-ocr/badge.svg)
+[![Crates.io](https://img.shields.io/crates/v/wordfeud-ocr)](https://crates.io/crates/wordfeud-ocr)
+[![Documentation](https://docs.rs/wordfeud-ocr/badge.svg)](https://docs.rs/wordfeud-ocr)
 
 A Rust library that recognizes a screenshot from the Wordfeud game on Android phone. 
 

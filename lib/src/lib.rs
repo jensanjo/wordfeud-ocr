@@ -1,5 +1,7 @@
-
-#![doc(html_logo_url = "https://github.com/jensanjo/wordfeud-ocr/raw/master/images/logo-ocr.png", html_favicon_url = "https://github.com/jensanjo/wordfeud-ocr/raw/master/images/logo-ocr.png")]
+#![doc(
+    html_logo_url = "https://github.com/jensanjo/wordfeud-ocr/raw/master/images/logo-ocr.png",
+    html_favicon_url = "https://github.com/jensanjo/wordfeud-ocr/raw/master/images/logo-ocr.png"
+)]
 //! An OCR library that reads the state of a Wordfeud board from a screenshot
 //!
 //! This library recognizes the tiles on a Wordfeud board and rack, and also the bonus squares on the board.

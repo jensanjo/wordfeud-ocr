@@ -3,3 +3,6 @@ members = [
     "lib",
     "pylib",
 ]
+
+[profile.dev]
+opt-level = 1

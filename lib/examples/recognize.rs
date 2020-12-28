@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-// use image::{imageops::FilterType, GenericImageView};
 use std::time::Instant;
 use wordfeud_ocr::Board;
 
@@ -15,13 +14,8 @@ fn run() -> Result<()> {
 
     let res = board.recognize_screenshot(&gray)?;
     println!("recognize screenshot took {:?}", t0.elapsed());
-    println!("{:?}", res);
-
-    // save templates
-    use wordfeud_ocr::{Layout, save_templates};
-    let layout = Layout::new(&gray).segment()?;
-    let cells = Layout::get_cells(&layout.rows, &layout.cols);
-    save_templates("out", &gray, &cells, &res.tiles_ocr);
+    println!("Screenshot: {}\n\nTiles:\n{}\n\nLetters: {}\n\nGrid:\n{}\n",
+        path, res.tiles_ocr, res.rack_ocr, res.grid_ocr);
     Ok(())
 }
 

@@ -20,7 +20,7 @@ fn test_recognize_screenshot(screenshot_path: &str, expect: &str) -> Result<()> 
 }
 
 #[test]
-fn test_english_screenshot() -> Result<()> {
+fn test_screenshot_english() -> Result<()> {
     test_recognize_screenshot(
         "tests/screenshot_english.png",
         include_str!("screenshot_english.expect"),
@@ -29,10 +29,19 @@ fn test_english_screenshot() -> Result<()> {
 }
 
 #[test]
-fn test_dutch_screenshot() -> Result<()> {
+fn test_screenshot_dutch() -> Result<()> {
     test_recognize_screenshot(
         "tests/screenshot_dutch.png",
         include_str!("screenshot_dutch.expect"),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn test_screenshot_dutch_1() -> Result<()> {
+    test_recognize_screenshot(
+        "tests/screenshot_dutch_1.png",
+        include_str!("screenshot_dutch_1.expect"),
     )?;
     Ok(())
 }

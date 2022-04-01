@@ -1,6 +1,6 @@
-from pywordfeud_ocr import recognize_screenshot
+from pywordfeud_ocr import recognize_screenshot_from_file
 screenshot_filename = "../lib/screenshots/screenshot_blank_tile.png"
-res = recognize_screenshot(screenshot_filename)
+res = recognize_screenshot_from_file(screenshot_filename)
 print("State:\n{}".format('\n'.join(res['state_ocr'])))
 print("Rack: \"{}\"".format(res['rack_ocr']))
 print("Board:\n{}".format('\n'.join(res['board_ocr'])))

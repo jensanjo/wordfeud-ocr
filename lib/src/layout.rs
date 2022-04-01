@@ -1,21 +1,29 @@
 use crate::error::Error;
 use image::{math::Rect, GrayImage, ImageBuffer, Luma};
 use imageproc::integral_image::{integral_image, integral_squared_image, sum_image_pixels};
+use log::debug;
 
 pub const THRESHOLD: f64 = 0.65;
 
 type IntegralImage = ImageBuffer<Luma<u64>, Vec<u64>>;
 
-/// Represents the layout of a wordfeud board
+/// Represents the recognized layout of a wordfeud board.
 pub struct Layout {
     integral: IntegralImage,
     integral_squared: IntegralImage,
+    /// The screen area (the entire screenshot)
     pub screen: Rect,
+    /// The board area (a 15 x 15 grid)
     pub board_area: Rect,
+    /// The rack area (1 row x 7 column grid)
     pub rack_area: Rect,
+    /// The start and end `y` coordinate of the board rows
     pub rows: Vec<(usize, usize)>,
+    /// The start and end `x` coordinate of the board columns
     pub cols: Vec<(usize, usize)>,
+    /// The start and end `y` coordinate of the rack row
     pub rack_rows: Vec<(usize, usize)>,
+    /// The start and end `x` coordinate of the rack columns
     pub rack_cols: Vec<(usize, usize)>,
 }
 
@@ -33,7 +41,7 @@ pub enum Segment {
 }
 
 fn close(a: u32, b: u32, tol: u32) -> bool {
-    (a as i32 - b as i32).abs() < tol as i32
+    (a as i32 - b as i32).abs() <= tol as i32
 }
 
 fn bounds(rect: Rect) -> (u32, u32, u32, u32) {
@@ -41,6 +49,10 @@ fn bounds(rect: Rect) -> (u32, u32, u32, u32) {
 }
 
 impl Layout {
+    /// Return a new Layout for `img`.
+    ///
+    /// Only the screen area is set to the image bounding rect. Empty board_area and rack_area.
+    /// Empty board and rack rows and columns.
     pub fn new(img: &GrayImage) -> Layout {
         let integral: IntegralImage = integral_image::<_, u64>(img);
         let integral_squared: IntegralImage = integral_squared_image::<_, u64>(img);
@@ -75,12 +87,32 @@ impl Layout {
         }
     }
 
+    /// Segment the screenshot:
+    /// - locate the board and rack area
+    /// - within board and rack area:
+    ///     - locate the start and end of each row and column
+    ///
+    /// After segmentation all the `Layout` fields are properly set.
+    /// # Errors
+    /// If the screenshot can not be properly segmented.
+    /// # Example
+    /// ```
+    /// # use wordfeud_ocr::{Layout, Error};
+    /// # use anyhow::Result;
+    /// let path = "tests/screenshot_english.png";
+    /// let gray = image::open(path)?.into_luma8();
+    /// let layout = Layout::new(&gray).segment()?;
+    /// assert_eq!(layout.cols.len(), 15);
+    /// assert_eq!(layout.rows.len(), 15);
+    /// # Ok::<(), Error>(())
+    /// ``` 
     pub fn segment(mut self) -> Result<Self, Error> {
         let mut state = Segment::LookForTopBorder(0);
         let rowstats = self.stats(bounds(self.screen), true);
         let (mut rack_y, mut rack_height) = (0, 0);
         let tol = 2;
         for (i, &(sum, var)) in rowstats.iter().enumerate() {
+            debug!("{} {} {}", i, sum, var);
             match state {
                 Segment::LookForTopBorder(n) => {
                     if close(sum, 51, tol) && (var < 25) {
@@ -88,17 +120,20 @@ impl Layout {
                     }
                     if n > 3 {
                         state = Segment::InTopBorder;
+                        debug!("# {i} InTopBorder");
                     }
                 }
                 Segment::InTopBorder => {
                     if close(sum, 24, tol) {
                         state = Segment::LookForRisingEdge(0);
+                        debug!("# {i} LookForRisingEdge(0)");
                     }
                 }
                 Segment::LookForRisingEdge(n) => {
                     if sum > 24 + tol {
                         self.rows.push((i, 0));
                         state = Segment::InTile(n);
+                        debug!("# {i} InTile({n})");
                     }
                 }
                 Segment::InTile(n) => {
@@ -106,35 +141,40 @@ impl Layout {
                         self.rows[n].1 = i - 1;
                         if n < 14 {
                             state = Segment::LookForRisingEdge(n + 1);
+                            debug!("# {i} LookForRisingEdge({})", n + 1);
                         } else {
                             state = Segment::LookForBottomBorder(0);
+                            debug!("# {i} LookForBottomBorder(0)");
                         }
                     }
                 }
                 Segment::LookForBottomBorder(n) => {
                     if close(sum, 51, tol) && (var < 25) {
                         state = Segment::LookForBottomBorder(n + 1);
+                        debug!("# {i} LookForBottomBorder({})", n + 1);
                     }
                     if n > 5 {
                         state = Segment::InBottomBorder;
+                        debug!("# {i} InBottomBorder");
                     }
                 }
                 Segment::InBottomBorder => {
                     if close(sum, 24, tol) && (var < 10) {
                         state = Segment::LookForRack;
+                        debug!("# {i} LookForRack");
                     }
                 }
                 Segment::LookForRack => {
                     if var > 100 {
                         rack_y = i as u32;
                         state = Segment::InRack;
+                        debug!("# {i} InRack");
                     }
                 }
                 Segment::InRack => {
-                    // println!("{}: Inrack: {} {}", i, sum, var);
                     if close(sum, 24, tol) && (var == 0) {
                         rack_height = i as u32 - rack_y;
-                        // println!("Done!");
+                        debug!("# {i} Done");
                         state = Segment::Done;
                     }
                 }
@@ -183,8 +223,8 @@ impl Layout {
     ) -> Result<Vec<(usize, usize)>, Error> {
         let mut cols = Vec::new();
         let mut state = Segment::LookForRisingEdge(0);
-        let tol = 2;
-        for (i, &(sum, var)) in colstats.iter().enumerate() {
+        let tol = 5;
+        for (i, &(sum, _var)) in colstats.iter().enumerate() {
             match state {
                 Segment::LookForRisingEdge(n) => {
                     if sum > threshold + tol {
@@ -194,7 +234,7 @@ impl Layout {
                     }
                 }
                 Segment::InTile(n) => {
-                    if close(sum, 24, tol) && (var == 0) {
+                    if close(sum, 24, tol) /*&& (var == 0)*/ {
                         cols[n].1 = i - 1;
                         if n + 1 < maxcols {
                             state = Segment::LookForRisingEdge(n + 1);
@@ -249,7 +289,9 @@ impl Layout {
         stats
     }
 
-    /// Create tile sub images for board
+    /// Create cell bounding rectangles from rows and columns,
+    ///
+    /// All cells have the same width and height.
     pub fn get_cells(rows: &[(usize, usize)], cols: &[(usize, usize)]) -> Vec<Rect> {
         let mut cells = Vec::new();
         if cols.is_empty() {
@@ -276,6 +318,10 @@ impl Layout {
         cells
     }
 
+    /// Returns the indices of all cells that contain a tile.
+    /// 
+    /// Whether a cell contains a tile or not is determined from the mean gray value of the cell area.
+    /// A gray value of more than 65% (166 / 256) must be a tile.
     pub fn get_tile_index(&self, cells: &[Rect]) -> Vec<usize> {
         let mut index = Vec::new();
         for (i, &cell) in cells.iter().enumerate() {
@@ -308,7 +354,7 @@ impl Layout {
         sum[0] as f64 / count as f64 / 256.
     }
 
-    /// calculate mean and variance pixel value in rect
+    /// Calculate mean and standard deviation for the pixels in `rect`.
     pub fn area_stats(&self, rect: &Rect) -> (f64, f64) {
         let (left, top, right, bottom) = (
             rect.x,

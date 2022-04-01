@@ -8,7 +8,7 @@ use imageproc::template_matching::{find_extremes, match_template, MatchTemplateM
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 
-/// Recognized letters or bonus squares, organized as a two-dimensional grid.
+/// Recognized letters or bonus squares, organized as a two-dimensional grid of strings
 #[derive(Debug, Clone, Default)]
 pub struct Ocr(pub Vec<Vec<String>>);
 
@@ -32,20 +32,24 @@ pub type OcrStats = Vec<OcrStat>;
 #[derive(Debug, Clone, Default)]
 pub struct OcrStat {
     /// The linear cell index (0.. nrows * ncols)
-    index: usize,
+    pub index: usize,
     /// The tag of the matched template
-    tag: String,
+    pub tag: String,
     /// The match error (the minimum value of all matched templates)
-    min_value: f32,
+    pub min_value: f32,
     /// The location where the best template match was found
-    min_value_location: (u32, u32),
+    pub min_value_location: (u32, u32),
 }
 /// Holds the result of recognize_screenshot: recognized tiles on the board and rack, plus grid with bonus squares.
 #[derive(Debug, Clone)]
 pub struct OcrResults {
-    /// The tiles on the board
+    /// The tiles on the board: a 15x15 grid of tiles.
+    ///
+    /// `.`: empty cell, lower case letter(s): normal tile, upper case letter(s): a blank tile used as a wildcard. 
     pub tiles_ocr: Ocr,
-    /// The grid with bonus squares
+    /// A 15x15 grid with bonus squares.
+    /// 
+    /// `--`: no bonus, `2l`: double letter, `3l`: triple letter, `2w`: double word, `3w`: triple word
     pub grid_ocr: Ocr,
     /// The tiles on the rack
     pub rack_ocr: Ocr,
@@ -99,9 +103,11 @@ fn template_from_buffer(name: &str, buf: &[u8]) -> (String, GrayImage) {
     )
 }
 
-/// Wordfeud board recognizer
+/// Wordfeud board recognizer.
 pub struct Board {
+    /// The template images used to recognize the tiles
     pub templates: Vec<(String, GrayImage)>,
+    /// The bonus templates used to recognize the bonus cells on the board.
     pub bonus_templates: Vec<(String, GrayImage)>,
 }
 
@@ -112,6 +118,9 @@ impl Default for Board {
 }
 
 impl Board {
+    /// Create a new board.
+    ///
+    /// The template images are included in the executable.
     pub fn new() -> Board {
         let templates = LETTER_TEMPLATES
             .iter()
@@ -129,14 +138,16 @@ impl Board {
 
     /// Recognize a wordfeud board screenshot.
     ///
-    /// Returns a result that contains the detected tiles on the board and in the rack, and the detected board with
+    /// The `screenshot` must be a grayscale image from the Wordfeud game, at the original resolution. 
+    ///
+    /// Returns an result that contains the detected tiles on the board and in the rack, and the detected board with
     /// the bonus tiles locations.
     /// The recognition process consists of these phases:
     /// 1. Segmentation of the board: find the board and rack area, and locate the cells on the board and the rack
     /// 2. Use template matching to recognize the tiles and bonus squares
     ///
     /// # Errors
-    /// * The screenshot can not be segmented properly
+    /// * The screenshot can not be segmented properly. 
     ///
     pub fn recognize_screenshot(&self, screenshot: &GrayImage) -> Result<OcrResults, Error> {
         let layout = Layout::new(&screenshot).segment()?;
@@ -175,6 +186,12 @@ impl Board {
         Ok(res)
     }
 
+    /// Recognize a Wordfeud board screenshot from an image file path.
+    ///
+    /// # Errors
+    /// * The screenshot file can not be opened. See [image::open](image::open).
+    /// * The screenshot can not be segmented properly
+    ///
     pub fn recognize_screenshot_from_file(
         &self,
         screenshot_filename: &str,
@@ -183,6 +200,11 @@ impl Board {
         self.recognize_screenshot(&gray)
     }
 
+    /// Recognize a Wordfeud board screenshot from an image file loaded in a memory buffer.
+    /// # Errors
+    /// * The screenshot can not be loaded from memory. See [image::load_from_memory](image::load_from_memory).
+    /// * The screenshot can not be segmented properly
+    ///
     pub fn recognize_screenshot_from_memory(&self, screenshot: &[u8]) -> Result<OcrResults, Error> {
         let gray = image::load_from_memory(&screenshot)?.into_luma8();
         self.recognize_screenshot(&gray)

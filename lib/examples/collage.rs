@@ -9,6 +9,12 @@ fn run() -> Result<()> {
         .into_luma8();
     eprintln!("read image from {}", path);
     let layout = Layout::new(&gray).segment()?;
+    println!("Screen: {:#?}", layout.screen);
+    println!("Board area: {:#?}", layout.board_area);
+    println!("Rack area: {:#?}", layout.rack_area);
+    println!("Layout rows: {:?}", layout.rows);
+    println!("Layout cols: {:?}", layout.cols);
+
     let cells = Layout::get_cells(&layout.rows, &layout.cols);
     let index = layout.get_tile_index(&cells);
     let mut tiles: Vec<_> = index.iter().map(|&i| cells[i]).collect();

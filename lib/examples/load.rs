@@ -14,13 +14,7 @@ fn run() -> Result<()> {
 
     let gray = img.clone().into_luma8();
     let layout = Layout::new(&gray).segment()?;
-
-    // println!("rack stats:");
-    // let rackstats = layout.rackstats();
-    // for (i, (mean, var)) in rackstats.iter().enumerate() {
-    //     println!("{} {} {}", i, mean, var);
-    // }
-
+    
     eprintln!("board area: {:?}", layout.board_area);
     for (i, &(y0, y1)) in layout.rows.iter().enumerate() {
         eprintln!("  Row {}: {},{} {}", i, y0, y1, y1 - y0);

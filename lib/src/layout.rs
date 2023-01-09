@@ -8,7 +8,8 @@ pub const THRESHOLD: f64 = 0.65;
 type IntegralImage = ImageBuffer<Luma<u64>, Vec<u64>>;
 
 /// Represents the recognized layout of a wordfeud board.
-pub struct Layout {
+pub struct 
+Layout {
     integral: IntegralImage,
     integral_squared: IntegralImage,
     /// The screen area (the entire screenshot)
@@ -172,10 +173,10 @@ impl Layout {
                     }
                 }
                 Segment::InRack => {
-                    if close(sum, 24, tol) && (var == 0) {
+                    if close(sum, 24, tol) && (var < 10) {
                         rack_height = i as u32 - rack_y;
-                        debug!("# {i} Done");
                         state = Segment::Done;
+                        debug!("# {i} Done");
                     }
                 }
                 Segment::Done => {}
@@ -262,7 +263,7 @@ impl Layout {
         Self::segment_columns(48, 7, &colstats)
     }
 
-    fn stats(&self, bounds: (u32, u32, u32, u32), horizontal: bool) -> Vec<(u32, u32)> {
+    pub fn stats(&self, bounds: (u32, u32, u32, u32), horizontal: bool) -> Vec<(u32, u32)> {
         let mut stats = Vec::new();
         let (x, y, w, h) = bounds;
         let (dim, count) = if horizontal { (h, w) } else { (w, h) };

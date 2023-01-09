@@ -4,3 +4,6 @@ stats/
 screenshots/
 /*.png
 *.out
+lib/board.png
+lib/rack.png
+lib/screenshot.png

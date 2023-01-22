@@ -111,7 +111,7 @@ impl Layout {
         let mut state = Segment::LookForTopBorder(0);
         let rowstats = self.stats(bounds(self.screen), true);
         let (mut rack_y, mut rack_height) = (0, 0);
-        let tol = 2;
+        let tol = 4;
         for (i, &(sum, var)) in rowstats.iter().enumerate() {
             debug!("{} {} {}", i, sum, var);
             match state {

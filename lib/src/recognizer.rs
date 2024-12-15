@@ -258,10 +258,7 @@ impl Board {
             let mut tile: GrayImage = img.view(cell.x, cell.y, cell.width, cell.height).to_image();
             // convert to binary image improves the template match accurarcy
             tile = threshold(&tile, thresh);
-
-            if tile.width() > 67 {
-                tile = resize(&tile, 67, 67, FilterType::Lanczos3);
-            }
+            tile = resize(&tile, 67, 67, FilterType::Lanczos3);
 
             // Area for template matching. Cell dimension is 67 square
             // Template dimension is wxh = 38 x 50
@@ -315,9 +312,10 @@ impl Board {
 
             // create tile image
             let tile: GrayImage = img.view(cell.x, cell.y, cell.width, cell.height).to_image();
+            let tile = resize(&tile, 67, 67, FilterType::Lanczos3);
 
             // Area for template matching. Cell dimension is wxh = 67 x 67.
-            // Template dimension is wxh = 46x46
+            // Template dimension is wxh = 46x26
             let area = tile.view(8, 21, 48, 28).to_image();
 
             // // match templates

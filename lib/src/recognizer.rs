@@ -258,10 +258,10 @@ impl Board {
             let mut tile: GrayImage = img.view(cell.x, cell.y, cell.width, cell.height).to_image();
             // convert to binary image improves the template match accurarcy
             tile = threshold(&tile, thresh);
-            tile = resize(&tile, 67, 67, FilterType::Lanczos3);
+            tile = resize(&tile, 68, 68, FilterType::Lanczos3);
 
-            // Area for template matching. Cell dimension is 67 square
-            // Template dimension is wxh = 38 x 50
+            // Area for template matching. Cell dimension is 68 square
+            // Template dimension is wxh = 38 x 60
             let area = tile.view(6, 3, 40, 62).to_image();
 
             // match templates
@@ -270,6 +270,12 @@ impl Board {
             } else {
                 (String::from("*"), 0.0_f32, (0_u32, 0_u32))
             };
+            // use this for debugging
+            // if cell.height > 100 {
+            //     let filename = format!("area_{index}_{letter}.png");
+            //     area.save(filename).unwrap();
+            //     println!("{index} {letter} {min_value:.3}, {min_value_location:?}")
+            // }
             let (row, col) = (index / cols, index % cols);
             ocr[row][col] = if !is_wildcard {
                 letter.to_lowercase()

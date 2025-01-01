@@ -81,3 +81,12 @@ fn test_screenshot_dutch_4() -> Result<()> {
     )?;
     Ok(())
 }
+
+#[test]
+fn test_screenshot_dutch_5() -> Result<()> {
+    test_recognize_screenshot(
+        "tests/screenshot_dutch_5.png",
+        include_str!("screenshot_dutch_5.expect"),
+    )?;
+    Ok(())
+}
